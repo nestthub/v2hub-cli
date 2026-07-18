@@ -257,50 +257,56 @@ class OutputFormatter:
     def show_subscription_detail(self, subscription: Subscription) -> None:
         """
         Display detailed subscription information.
-        
+    
         Args:
             subscription: Subscription to display
         """
-
+    
         self.console.print(
             Panel(
-                f"[bold cyan]{getattr(subscription, 'name', '-') }[/bold cyan]\n"
-                f"Token: [green]{getattr(subscription, 'token', '-') }[/green]\n"
+                f"[bold cyan]{getattr(subscription, 'name', '-')}[/bold cyan]\n"
+                f"Token: [green]{getattr(subscription, 'token', '-')}[/green]\n"
                 f"Description: {getattr(subscription, 'description', '-') or '-'}\n"
-                f"Total configs: [yellow]{getattr(subscription, 'sources_count', '-') }[/yellow]\n"
+                f"Total configs: [yellow]{getattr(subscription, 'sources_count', '-')}[/yellow]\n"
                 f"Created: {getattr(subscription, 'created_at', '-')}\n"
                 f"Updated: {getattr(subscription, 'updated_at', '-')}",
                 title="📦 Subscription",
                 border_style="cyan",
             )
         )
-
+    
         sources = getattr(subscription, "sources", None)
         if not sources:
             return
-
+    
         table = Table(title="📡 Sources", box=box.ROUNDED)
         table.add_column("ID", style="green")
         table.add_column("Type", style="cyan")
         table.add_column("Data", style="white")
+        table.add_column("Visible", justify="center", style="green")
+        table.add_column("Depth", justify="right", style="blue")
         table.add_column("Order", justify="right", style="yellow")
-
+    
         for source in sources:
             data = self._safe_str(getattr(source, "data", None))
             source_type = getattr(source, "source_type", None)
-
+    
             if source_type == SourceType.CONFIG and data:
                 conf_parts = data.split("#", maxsplit=1)
                 if len(conf_parts) == 2:
                     comment = conf_parts[1]
                     data = f"{conf_parts[0]}#{self.short(comment, 32)}"
                     data = "\n".join(textwrap.wrap(data, width=180))
-
+    
+            visible = "✓" if not getattr(source, "is_hidden", False) else "✗"
+    
             table.add_row(
                 self._safe_str(getattr(source, "id", None)),
                 self._safe_str(source_type),
                 data,
+                visible,
+                self._safe_str(getattr(source, "max_depth", None)),
                 self._safe_str(getattr(source, "order_index", None)),
             )
-
-        self.console.print(table) 
+    
+        self.console.print(table)

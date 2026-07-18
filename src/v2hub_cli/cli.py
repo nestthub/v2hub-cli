@@ -4,6 +4,7 @@ Unified CLI for VPN Subscription API.
 Beautiful command-line interface with both regular and admin functionality.
 """
 from __future__ import annotations
+import json
 from typing import List
 
 import typer
@@ -11,6 +12,7 @@ from rich.console import Console
 from rich.panel import Panel
 
 from v2hub import __version__
+from v2hub.client import SourceCreate
 from v2hub_cli.cli_formatter import OutputFormatter
 from v2hub_cli.cli_manager import ClientManager
 
@@ -58,6 +60,67 @@ def _try_register_admin(app: typer.Typer) -> None:
 
 _try_register_admin(app)
 # ═══════════════════════════════════════════════════════════════════════════
+# Helpers
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+def _parse_source(raw: str) -> dict:
+    """
+    Parse a single --source value.
+
+    Accepts either a plain string (source data, unchanged from the
+    original calling convention):
+
+        -s "http://127.0.0.1/sub/HC8pO7hca2QXcjtF6aTZOt9uI8v79I8R_gXXDp5_U3A"
+
+    ...or a JSON object when you need per-source is_hidden/max_depth:
+
+        -s '{"data": "http://127.0.0.1/sub/...", "hidden": true, "depth": 0}'
+
+    Detected by whether the value starts with "{" after stripping
+    whitespace, so ordinary source strings (vless://, vmess://, https://,
+    etc.) are never mistaken for JSON. "hidden" defaults to false and
+    "depth" is optional; only "data" is required inside the object.
+    """
+    stripped = raw.strip()
+    if not stripped.startswith("{"):
+        return {"data": stripped}
+
+    try:
+        obj = json.loads(stripped)
+    except json.JSONDecodeError as e:
+        raise typer.BadParameter(
+            f"--source looks like JSON (starts with '{{') but failed to parse: {e}"
+        ) from e
+
+    if not isinstance(obj, dict) or "data" not in obj:
+        raise typer.BadParameter(
+            '--source JSON object must be an object with a "data" field, '
+            'e.g. \'{"data": "vless://...", "hidden": true, "depth": 0}\''
+        )
+
+    entry: dict = {"data": obj["data"]}
+    if obj.get("hidden"):
+        entry["is_hidden"] = True
+    if "depth" in obj and obj["depth"] is not None:
+        entry["max_depth"] = obj["depth"]
+    return entry
+
+
+def _build_sources(sources: List[str]) -> List[SourceCreate]:
+    """
+    Build the sources payload sent to v2hub-core.
+
+    Each item in `sources` is parsed independently via _parse_source(), so
+    a single --source list can freely mix plain strings and JSON objects
+    with per-source is_hidden/max_depth. Sources with no modifiers are
+    sent as plain strings, identical to the pre-update calling convention
+    -- nothing changes for existing scripts that don't use JSON sources.
+    """
+    return [SourceCreate(**_parse_source(s)) for s in sources]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Version Command
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -73,8 +136,8 @@ def version() -> None:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-@app.command()
-def list(
+@app.command(name="list")
+def sources_list(
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
 ) -> None:
@@ -102,14 +165,24 @@ def list(
 def create(
     name: str = typer.Argument(..., help="Subscription name"),
     description: str | None = typer.Option(None, "--description", "-d", help="Description"),
-    sources: List[str] = typer.Option([], "--source", "-s", help="Initial sources"),
+    sources: List[str] = typer.Option(
+        [],
+        "--source",
+        "-s",
+        help=(
+            'Initial source: plain string, or JSON object for per-source '
+            'options, e.g. \'{"data": "vless://...", "hidden": true, "depth": 0}\''
+        ),
+    ),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
 ) -> None:
     """Create a new subscription."""
     try:
         with ClientManager.get_client(base_url, api_token) as client:
-            sub = client.create_subscription(name, description, sources)
+            sub = client.create_subscription(
+                name, description, _build_sources(sources)
+            )
 
             formatter.show_success(
                 f"Created subscription: [cyan]{sub.name}[/cyan]",
@@ -147,17 +220,27 @@ def get(
         raise typer.Exit(1)
 
 
-@app.command()
+@app.command(name="add-sources")
 def add_sources(
     token: str = typer.Argument(..., help="Subscription token"),
-    sources: List[str] = typer.Option(..., "--source", "-s", help="Sources to add"),
+    sources: List[str] = typer.Option(
+        ...,
+        "--source",
+        "-s",
+        help=(
+            'Source to add: plain string, or JSON object for per-source '
+            'options, e.g. \'{"data": "vless://...", "hidden": true, "depth": 0}\''
+        ),
+    ),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
 ) -> None:
     """Add sources to subscription."""
     try:
         with ClientManager.get_client(base_url, api_token) as client:
-            sub = client.add_sources(token, sources)
+            sub = client.add_sources(
+                token, _build_sources(sources)
+            )
 
             formatter.show_success(
                 f"Added [bold]{len(sources)}[/bold] source(s)",
@@ -174,8 +257,45 @@ def add_sources(
         formatter.show_error(e)
         raise typer.Exit(1)
 
+@app.command(name="replace-sources")
+def replace_sources(
+    token: str = typer.Argument(..., help="Subscription token"),
+    sources: List[str] = typer.Option(
+        ...,
+        "--source",
+        "-s",
+        help=(
+            'Source to replace: plain string, or JSON object for per-source '
+            'options, e.g. \'{"data": "vless://...", "hidden": true, "depth": 0}\''
+        ),
+    ),
+    base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
+    api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
+) -> None:
+    """Replace subscription's sources."""
+    try:
+        with ClientManager.get_client(base_url, api_token) as client:
+            sub = client.replace_sources(
+                token, _build_sources(sources)
+            )
 
-@app.command()
+            formatter.show_success(
+                f"Sources replaced",
+                title="✅ Sources Replaced",
+                details={
+                    "Total configs": f"[yellow]{sub.sources_count}[/yellow]",
+                },
+            )
+
+    except ValueError as e:
+        formatter.show_missing_config(str(e))
+        raise typer.Exit(1)
+    except Exception as e:
+        formatter.show_error(e)
+        raise typer.Exit(1)
+
+
+@app.command(name="remove-sources")
 def remove_sources(
     token: str = typer.Argument(..., help="Subscription token"),
     sources: List[str] = typer.Option(..., "--source", "-s", help="Sources to remove"),
@@ -255,7 +375,7 @@ def update(
     """Update subscription's name and/or description."""
     try:
         if not name and not description:
-            
+
             console.print(
                 Panel(
                     "[yellow]No updates provided[/yellow]\n\n"
@@ -277,7 +397,7 @@ def update(
             if description:
                 updated_fields.append("description updated")
 
-            
+
             console.print(
                 Panel(
                     "[green]✓[/green] Subscription updated\n\n"
@@ -295,7 +415,84 @@ def update(
         raise typer.Exit(1)
 
 
-@app.command()
+@app.command(name="update-config")
+def update_config(
+    token: str = typer.Argument(..., help="Subscription token"),
+    config_id: str = typer.Option(..., "--config-id", "-i", help="Config ID"),
+    comment: str | None = typer.Option(None, "--comment", "-c", help="New config comment"),
+    hidden: bool | None = typer.Option(
+        None,
+        "--hidden/--visible",
+        help="Hide or unhide this source's configs from end users",
+    ),
+    max_depth: int | None = typer.Option(
+        None,
+        "--max-depth",
+        min=0,
+        max=3,
+        help="Max nesting depth for this source (0-3)",
+    ),
+    base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
+    api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
+) -> None:
+    """
+    Update a config's settings within a subscription.
+
+    Replaces the deprecated 'update-comment' command: supports the same
+    comment update, plus --hidden/--visible and --max-depth. Only the
+    fields you pass are changed; everything else is left as-is.
+    """
+    if comment is None and hidden is None and max_depth is None:
+        console.print(
+            Panel(
+                "[yellow]No updates provided[/yellow]\n\n"
+                "You must specify at least one option:\n"
+                "  • --comment\n"
+                "  • --hidden / --visible\n"
+                "  • --max-depth",
+                title="⚠️ Nothing to update",
+                border_style="yellow",
+            )
+        )
+        return
+
+    try:
+        with ClientManager.get_client(base_url, api_token) as client:
+            client.update_source(
+                token,
+                config_id,
+                comment=comment,
+                is_hidden=hidden,
+                max_depth=max_depth,
+            )
+
+            details = {"Config": formatter.short(config_id, 20)}
+            if comment is not None:
+                details["Comment"] = comment
+            if hidden is not None:
+                details["Hidden"] = str(hidden)
+            if max_depth is not None:
+                details["Max depth"] = str(max_depth)
+
+            formatter.show_success(
+                "Config updated successfully",
+                title="Updated",
+                details=details,
+            )
+
+    except ValueError as e:
+        formatter.show_missing_config(str(e))
+        raise typer.Exit(1)
+    except Exception as e:
+        formatter.show_error(e)
+        raise typer.Exit(1)
+
+
+@app.command(
+    name="update-comment",
+    hidden=True,
+    help="[Deprecated: use 'update-config' instead] Update comment for a config inside subscription.",
+)
 def update_comment(
     token: str = typer.Argument(..., help="Subscription token"),
     config_id: str = typer.Option(..., "--config-id", "-i", help="Config ID"),
@@ -303,7 +500,18 @@ def update_comment(
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
 ) -> None:
-    """Update comment for a config inside subscription."""
+    """
+    [Deprecated] Update comment for a config inside subscription.
+
+    This command still works and is fully supported, but will not
+    receive further updates and may be removed in a future major
+    version. Use 'update-config' instead, which supports the same
+    comment update plus --hidden/--visible and --max-depth.
+    """
+    console.print(
+        "[yellow]⚠ 'update-comment' is deprecated and will not receive "
+        "further updates. Use 'update-config' instead.[/yellow]"
+    )
     try:
         with ClientManager.get_client(base_url, api_token) as client:
             client.update_comment(token, config_id, comment)
