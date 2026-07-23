@@ -6,8 +6,8 @@ Provides consistent, beautiful console output using rich.
 
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING, Protocol, Sequence
 import textwrap
+from typing import TYPE_CHECKING, Any, Protocol
 
 try:
     from rich import box
@@ -23,6 +23,8 @@ from v2hub.core.exceptions import VPNAPIError
 from v2hub.models import SourceType
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from v2hub.models import Subscription
 else:
     Subscription = Any
@@ -45,7 +47,7 @@ class HasWhitelistEntry(Protocol):
 class OutputFormatter:
     """
     Formats CLI output with rich styling.
-    
+
     Centralizes all console output formatting for consistency
     and maintainability.
     """
@@ -53,7 +55,7 @@ class OutputFormatter:
     def __init__(self, console: Console | None = None) -> None:
         """
         Initialize formatter.
-        
+
         Args:
             console: Optional rich console instance. Creates new if None.
         """
@@ -63,11 +65,11 @@ class OutputFormatter:
     def short(text: str, max_length: int = 12) -> str:
         """
         Shorten text with ellipsis if too long.
-        
+
         Args:
             text: Text to potentially shorten
             max_length: Maximum allowed length
-            
+
         Returns:
             Original or shortened text with ellipsis
         """
@@ -84,7 +86,7 @@ class OutputFormatter:
     def show_error(self, error: Exception) -> None:
         """
         Display formatted error message.
-        
+
         Args:
             error: Exception to display
         """
@@ -105,7 +107,7 @@ class OutputFormatter:
     def show_missing_config(self, missing: str) -> None:
         """
         Display missing configuration error.
-        
+
         Args:
             missing: Description of what's missing
         """
@@ -120,7 +122,7 @@ class OutputFormatter:
     ) -> None:
         """
         Display success message with optional details.
-        
+
         Args:
             message: Main success message
             title: Panel title
@@ -131,8 +133,7 @@ class OutputFormatter:
 
         if details:
             details_text = "\n".join(
-                f"[bold]{key}:[/bold] {value}"
-                for key, value in details.items()
+                f"[bold]{key}:[/bold] {value}" for key, value in details.items()
             )
             content = f"{content}\n\n{details_text}"
 
@@ -146,11 +147,11 @@ class OutputFormatter:
     ) -> Table:
         """
         Create formatted subscription list table.
-        
+
         Args:
             subscriptions: List of subscriptions
             title: Table title
-            
+
         Returns:
             Configured rich Table
         """
@@ -178,15 +179,14 @@ class OutputFormatter:
     ) -> Table:
         """
         Create formatted ban list table.
-        
+
         Args:
             bans: List of ban entries
             total: Total count for title
-            
+
         Returns:
             Configured rich Table
         """
-
 
         title = f"🚫 Bans ({total})" if total is not None else "🚫 Bans"
 
@@ -212,11 +212,11 @@ class OutputFormatter:
     ) -> Table:
         """
         Create formatted whitelist table.
-        
+
         Args:
             entries: List of whitelist entries
             total: Total count for title
-            
+
         Returns:
             Configured rich Table
         """
@@ -237,19 +237,21 @@ class OutputFormatter:
 
         return table
 
-    def show_version(self, version: str, *, app_name: str = "VPN Subscription API Client") -> None:
+    def show_version(self, versions: dict[str, str]) -> None:
         """
-        Display version information.
-        
+        Display installed package versions.
+
         Args:
-            version: Version string
-            app_name: Application name
+            versions: Mapping of package names to version strings.
         """
+        body = "\n".join(
+            f"[cyan]{name}[/cyan]: [green]{version}[/green]" for name, version in versions.items()
+        )
+
         self.console.print(
             Panel(
-                f"[bold cyan]{app_name}[/bold cyan]\n"
-                f"Version: [green]{version}[/green]",
-                title="ℹ️ Version",
+                body,
+                title="ⓘ Versions",
                 border_style="cyan",
             )
         )
@@ -257,11 +259,11 @@ class OutputFormatter:
     def show_subscription_detail(self, subscription: Subscription) -> None:
         """
         Display detailed subscription information.
-    
+
         Args:
             subscription: Subscription to display
         """
-    
+
         self.console.print(
             Panel(
                 f"[bold cyan]{getattr(subscription, 'name', '-')}[/bold cyan]\n"
@@ -274,11 +276,11 @@ class OutputFormatter:
                 border_style="cyan",
             )
         )
-    
+
         sources = getattr(subscription, "sources", None)
         if not sources:
             return
-    
+
         table = Table(title="📡 Sources", box=box.ROUNDED)
         table.add_column("ID", style="green")
         table.add_column("Type", style="cyan")
@@ -286,20 +288,20 @@ class OutputFormatter:
         table.add_column("Visible", justify="center", style="green")
         table.add_column("Depth", justify="right", style="blue")
         table.add_column("Order", justify="right", style="yellow")
-    
+
         for source in sources:
             data = self._safe_str(getattr(source, "data", None))
             source_type = getattr(source, "source_type", None)
-    
+
             if source_type == SourceType.CONFIG and data:
                 conf_parts = data.split("#", maxsplit=1)
                 if len(conf_parts) == 2:
                     comment = conf_parts[1]
                     data = f"{conf_parts[0]}#{self.short(comment, 32)}"
                     data = "\n".join(textwrap.wrap(data, width=180))
-    
+
             visible = "✓" if not getattr(source, "is_hidden", False) else "✗"
-    
+
             table.add_row(
                 self._safe_str(getattr(source, "id", None)),
                 self._safe_str(source_type),
@@ -308,5 +310,5 @@ class OutputFormatter:
                 self._safe_str(getattr(source, "max_depth", None)),
                 self._safe_str(getattr(source, "order_index", None)),
             )
-    
+
         self.console.print(table)

@@ -3,16 +3,19 @@ Unified CLI for VPN Subscription API.
 
 Beautiful command-line interface with both regular and admin functionality.
 """
+
 from __future__ import annotations
+
 import json
-from typing import List
+from importlib.metadata import PackageNotFoundError, version
+from typing import Any
 
 import typer
 from rich.console import Console
 from rich.panel import Panel
 
-from v2hub import __version__
-from v2hub.client import SourceCreate
+from v2hub.models.requests import SourceCreate
+from v2hub_cli import __version__ as cli_version
 from v2hub_cli.cli_formatter import OutputFormatter
 from v2hub_cli.cli_manager import ClientManager
 
@@ -24,6 +27,21 @@ app = typer.Typer(
 
 console = Console()
 formatter = OutputFormatter(console)
+
+
+def _package_version(package: str) -> str:
+    try:
+        return version(package)
+    except PackageNotFoundError:
+        return "not installed"
+
+
+def _get_versions() -> dict[str, str]:
+    return {
+        "v2hub": _package_version("v2hub"),
+        "v2hub-cli": cli_version,
+        "v2hub-admin": _package_version("v2hub-admin"),
+    }
 
 
 def _try_register_admin(app: typer.Typer) -> None:
@@ -64,7 +82,7 @@ _try_register_admin(app)
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-def _parse_source(raw: str) -> dict:
+def _parse_source(raw: str) -> dict[str, Any]:
     """
     Parse a single --source value.
 
@@ -99,7 +117,7 @@ def _parse_source(raw: str) -> dict:
             'e.g. \'{"data": "vless://...", "hidden": true, "depth": 0}\''
         )
 
-    entry: dict = {"data": obj["data"]}
+    entry: dict[str, Any] = {"data": obj["data"]}
     if obj.get("hidden"):
         entry["is_hidden"] = True
     if "depth" in obj and obj["depth"] is not None:
@@ -107,7 +125,7 @@ def _parse_source(raw: str) -> dict:
     return entry
 
 
-def _build_sources(sources: List[str]) -> List[SourceCreate]:
+def _build_sources(sources: list[str]) -> list[SourceCreate]:
     """
     Build the sources payload sent to v2hub-core.
 
@@ -125,10 +143,10 @@ def _build_sources(sources: List[str]) -> List[SourceCreate]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 
-@app.command()
-def version() -> None:
+@app.command(name="version")
+def show_version() -> None:
     """Show version information."""
-    formatter.show_version(__version__)
+    formatter.show_version(_get_versions())
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -155,22 +173,22 @@ def sources_list(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command()
 def create(
     name: str = typer.Argument(..., help="Subscription name"),
     description: str | None = typer.Option(None, "--description", "-d", help="Description"),
-    sources: List[str] = typer.Option(
+    sources: list[str] = typer.Option(
         [],
         "--source",
         "-s",
         help=(
-            'Initial source: plain string, or JSON object for per-source '
+            "Initial source: plain string, or JSON object for per-source "
             'options, e.g. \'{"data": "vless://...", "hidden": true, "depth": 0}\''
         ),
     ),
@@ -180,9 +198,7 @@ def create(
     """Create a new subscription."""
     try:
         with ClientManager.get_client(base_url, api_token) as client:
-            sub = client.create_subscription(
-                name, description, _build_sources(sources)
-            )
+            sub = client.create_subscription(name, description, _build_sources(sources))
 
             formatter.show_success(
                 f"Created subscription: [cyan]{sub.name}[/cyan]",
@@ -194,10 +210,10 @@ def create(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -214,21 +230,21 @@ def get(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command(name="add-sources")
 def add_sources(
     token: str = typer.Argument(..., help="Subscription token"),
-    sources: List[str] = typer.Option(
+    sources: list[str] = typer.Option(
         ...,
         "--source",
         "-s",
         help=(
-            'Source to add: plain string, or JSON object for per-source '
+            "Source to add: plain string, or JSON object for per-source "
             'options, e.g. \'{"data": "vless://...", "hidden": true, "depth": 0}\''
         ),
     ),
@@ -238,9 +254,7 @@ def add_sources(
     """Add sources to subscription."""
     try:
         with ClientManager.get_client(base_url, api_token) as client:
-            sub = client.add_sources(
-                token, _build_sources(sources)
-            )
+            sub = client.add_sources(token, _build_sources(sources))
 
             formatter.show_success(
                 f"Added [bold]{len(sources)}[/bold] source(s)",
@@ -252,20 +266,21 @@ def add_sources(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
+
 
 @app.command(name="replace-sources")
 def replace_sources(
     token: str = typer.Argument(..., help="Subscription token"),
-    sources: List[str] = typer.Option(
+    sources: list[str] = typer.Option(
         ...,
         "--source",
         "-s",
         help=(
-            'Source to replace: plain string, or JSON object for per-source '
+            "Source to replace: plain string, or JSON object for per-source "
             'options, e.g. \'{"data": "vless://...", "hidden": true, "depth": 0}\''
         ),
     ),
@@ -275,12 +290,10 @@ def replace_sources(
     """Replace subscription's sources."""
     try:
         with ClientManager.get_client(base_url, api_token) as client:
-            sub = client.replace_sources(
-                token, _build_sources(sources)
-            )
+            sub = client.replace_sources(token, _build_sources(sources))
 
             formatter.show_success(
-                f"Sources replaced",
+                "Sources replaced",
                 title="✅ Sources Replaced",
                 details={
                     "Total configs": f"[yellow]{sub.sources_count}[/yellow]",
@@ -289,16 +302,16 @@ def replace_sources(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command(name="remove-sources")
 def remove_sources(
     token: str = typer.Argument(..., help="Subscription token"),
-    sources: List[str] = typer.Option(..., "--source", "-s", help="Sources to remove"),
+    sources: list[str] = typer.Option(..., "--source", "-s", help="Sources to remove"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
@@ -328,10 +341,10 @@ def remove_sources(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -352,16 +365,14 @@ def delete(
         with ClientManager.get_client(base_url, api_token) as client:
             client.delete_subscription(token)
 
-            formatter.show_success(
-                f"Deleted subscription: [cyan]{token}[/cyan]"
-            )
+            formatter.show_success(f"Deleted subscription: [cyan]{token}[/cyan]")
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -375,7 +386,6 @@ def update(
     """Update subscription's name and/or description."""
     try:
         if not name and not description:
-
             console.print(
                 Panel(
                     "[yellow]No updates provided[/yellow]\n\n"
@@ -397,7 +407,6 @@ def update(
             if description:
                 updated_fields.append("description updated")
 
-
             console.print(
                 Panel(
                     "[green]✓[/green] Subscription updated\n\n"
@@ -409,10 +418,10 @@ def update(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command(name="update-config")
@@ -482,10 +491,10 @@ def update_config(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command(
@@ -527,10 +536,10 @@ def update_comment(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
 
 @app.command()
@@ -544,7 +553,6 @@ def refresh(
         with ClientManager.get_client(base_url, api_token) as client:
             result = client.refresh_subscription(token)
 
-
             refreshed = result.refreshed or 0
             failed = result.failed or 0
             skipped = result.skipped or 0
@@ -557,7 +565,7 @@ def refresh(
                 console.print(
                     Panel(
                         f"[yellow]{message or 'Nothing to refresh'}[/yellow]",
-                        title="ℹ️ No Action",
+                        title="ⓘ No Action",
                         border_style="yellow",
                     )
                 )
@@ -604,12 +612,10 @@ def refresh(
 
     except ValueError as e:
         formatter.show_missing_config(str(e))
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except Exception as e:
         formatter.show_error(e)
-        raise typer.Exit(1)
-
-
+        raise typer.Exit(1) from None
 
 
 # ═══════════════════════════════════════════════════════════════════════════

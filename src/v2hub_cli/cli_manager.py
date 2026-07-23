@@ -6,24 +6,17 @@ Handles initialization and lifecycle of API clients.
 
 from __future__ import annotations
 
-"""
-Client management for CLI.
-
-Handles initialization and lifecycle of API clients.
-"""
-
 import os
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING
 
 __all__ = ["ClientManager"]
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
+
     from v2hub.client import VPNClient
     from v2hub_admin.client import AdminClient
-else:
-    VPNClient = Any
-    AdminClient = Any
 
 
 class ClientManager:
@@ -47,15 +40,15 @@ class ClientManager:
 
     @classmethod
     def resolve_base_url(cls, base_url: str | None = None) -> str | None:
-        return (base_url or cls._env(cls.V2HUB_API_URL))
+        return base_url or cls._env(cls.V2HUB_API_URL)
 
     @classmethod
     def resolve_api_token(cls, api_token: str | None = None) -> str | None:
-        return (api_token or cls._env(cls.V2HUB_API_TOKEN))
+        return api_token or cls._env(cls.V2HUB_API_TOKEN)
 
     @classmethod
     def resolve_secret_key(cls, secret_key: str | None = None) -> str | None:
-        return (secret_key or cls._env(cls.V2HUB_ADMIN_SECRET))
+        return secret_key or cls._env(cls.V2HUB_ADMIN_SECRET)
 
     @staticmethod
     @contextmanager
@@ -92,8 +85,7 @@ class ClientManager:
             from v2hub_admin.client import AdminClient
         except ImportError as exc:
             raise ImportError(
-                "Admin CLI support is not installed. "
-                "Install v2hub-admin or use the admin extra."
+                "Admin CLI support is not installed. Install v2hub-admin or use the admin extra."
             ) from exc
 
         from v2hub.core.retry import RetryConfig

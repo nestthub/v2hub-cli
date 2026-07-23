@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import Any, Iterator, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import typer
 from rich import box
@@ -23,16 +23,12 @@ from v2hub.core.retry import RetryConfig
 console = Console()
 
 if TYPE_CHECKING:
-    from v2hub_admin import AdminClient as AdminClientType
-else:
-    AdminClientType = Any
+    from collections.abc import Iterator
 
-
+AdminClient: Any = None
 try:
     from v2hub_admin import AdminClient, __version__
 except ImportError:
-    AdminClient = None  # type: ignore[assignment]
-    __version__ = "unknown"
     ADMIN_CLI_AVAILABLE = False
 else:
     ADMIN_CLI_AVAILABLE = True
@@ -41,12 +37,12 @@ else:
 def short(value: str, n: int = 12) -> str:
     if n <= 3:
         return value
-    return value if len(value) <= n else f"{value[: n - 3]}…"
+    return value if len(value) <= n else f"{value[: n - 1]}…"
 
 
 def _fail(message: str, exit_code: int = 1) -> None:
     console.print(f"[red]{message}[/red]")
-    raise typer.Exit(exit_code)
+    raise typer.Exit(exit_code) from None
 
 
 def _resolve_setting(
@@ -64,21 +60,15 @@ def get_admin_client(
     base_url: str | None,
     secret_key: str | None,
     timeout: float = 30.0,
-) -> Iterator[AdminClientType]:
-    if not ADMIN_CLI_AVAILABLE or AdminClient is None:
-        _fail(
-            "Error: package 'v2hub_admin' is not installed. "
-            "Install it to use admin commands."
-        )
+) -> Iterator[AdminClient]:
+    if not ADMIN_CLI_AVAILABLE:
+        _fail("Error: package 'v2hub_admin' is not installed. Install it to use admin commands.")
 
     resolved_base_url = _resolve_setting(base_url, "V2HUB_API_URL")
     resolved_secret_key = _resolve_setting(secret_key, "V2HUB_ADMIN_SECRET")
 
     if not resolved_base_url:
-        _fail(
-            "Error: API URL not provided. "
-            "Use --base-url or V2HUB_API_URL environment variable."
-        )
+        _fail("Error: API URL not provided. Use --base-url or V2HUB_API_URL environment variable.")
 
     if not resolved_secret_key:
         _fail(
@@ -115,7 +105,7 @@ def show_error(error: Exception) -> None:
     else:
         console.print(f"[red]Error: {error}[/red]")
 
-    raise typer.Exit(1)
+    raise typer.Exit(1) from None
 
 
 def key_value_table(title: str, rows: list[tuple[str, str]]) -> Table:
@@ -131,6 +121,7 @@ def key_value_table(title: str, rows: list[tuple[str, str]]) -> Table:
 
 def register_admin_commands(admin_app: typer.Typer) -> bool:
     if not ADMIN_CLI_AVAILABLE:
+
         @admin_app.command("version")
         def admin_version_unavailable() -> None:
             _fail("Error: admin client is not available. Install 'v2hub_admin'.")
@@ -142,7 +133,7 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
         console.print(
             Panel(
                 f"[bold]v2hub Admin Client[/bold]\nVersion: {__version__}",
-                title="ℹ️ Version",
+                title="ⓘ Version",
                 border_style="blue",
             )
         )
@@ -162,13 +153,13 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
                     ("API Token", str(getattr(result, "api_token", "-"))),
                 ]
                 if hasattr(result, "user_hash"):
-                    rows.append(("User Hash", str(getattr(result, "user_hash"))))
+                    rows.append(("User Hash", str(result.user_hash)))
 
                 console.print(key_value_table("👤 User Created", rows))
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -187,15 +178,15 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
                     ("Active", str(getattr(result, "is_active", "-"))),
                 ]
                 if hasattr(result, "api_token"):
-                    rows.append(("API Token", str(getattr(result, "api_token"))))
+                    rows.append(("API Token", str(result.api_token)))
                 if hasattr(result, "user_hash"):
-                    rows.append(("User Hash", str(getattr(result, "user_hash"))))
+                    rows.append(("User Hash", str(result.user_hash)))
 
                 console.print(key_value_table("👤 User Info", rows))
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -221,7 +212,7 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -241,15 +232,15 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
                     ("Active", str(getattr(result, "is_active", is_active))),
                 ]
                 if hasattr(result, "api_token"):
-                    rows.append(("API Token", str(getattr(result, "api_token"))))
+                    rows.append(("API Token", str(result.api_token)))
                 if hasattr(result, "user_hash"):
-                    rows.append(("User Hash", str(getattr(result, "user_hash"))))
+                    rows.append(("User Hash", str(result.user_hash)))
 
                 console.print(key_value_table("🔄 User Status Updated", rows))
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -275,7 +266,7 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -306,7 +297,7 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -332,7 +323,7 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -357,15 +348,13 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
                     Panel(
                         panel_text,
                         title="📍 Ban Status",
-                        border_style="yellow"
-                        if getattr(status, "is_banned", False)
-                        else "green",
+                        border_style="yellow" if getattr(status, "is_banned", False) else "green",
                     )
                 )
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -402,7 +391,7 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -430,7 +419,7 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -456,7 +445,7 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 
@@ -489,7 +478,7 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
+            raise typer.Exit(1) from None
         except Exception as e:
             show_error(e)
 

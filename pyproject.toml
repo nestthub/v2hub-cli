@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "v2hub-cli"
-version = "1.0.2"
+version = "1.0.3"
 description = "Command-line interface for V2Hub VPN Subscription API client"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
     { name = "nestt", email = "nestt@tutamail.com" }
 ]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -27,7 +27,7 @@ classifiers = [
 keywords = ["vpn", "api", "cli", "client", "subscription", "terminal"]
 
 dependencies = [
-    "v2hub>=1.0.0",
+    "v2hub>=1.0.8",
     "typer>=0.9.0",
     "rich>=13.0.0",
     "build>=1.4.4",
@@ -35,9 +35,10 @@ dependencies = [
 
 [project.optional-dependencies]
 admin = [
-    "v2hub-admin>=1.0.0",
+    "v2hub-admin>=1.0.3",
 ]
 dev = [
+    "v2hub-admin>=1.0.3",
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
@@ -45,6 +46,7 @@ dev = [
     "mypy>=1.5.0",
     "ruff>=0.1.0",
     "pre-commit>=3.4.0",
+    "respx>=0.23.1",
 ]
 
 [project.scripts]
@@ -60,25 +62,27 @@ Issues = "https://github.com/nestthub/v2hub-cli/issues"
 packages = ["src/v2hub_cli"]
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 100
 src = ["src"]
 
+
+[tool.ruff.lint]
 select = [
     "E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM", "TCH", "PTH", "RUF",
 ]
 
 ignore = ["E501", "B008", "ARG002"]
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401", "F403"]
 "tests/*" = ["ARG001", "ARG002"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["v2hub", "v2hub_admin", "v2hub_cli"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.10"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
