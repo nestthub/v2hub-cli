@@ -2,6 +2,10 @@
 
 Beautiful, user-friendly command-line interface for V2Hub VPN Subscription API with optional admin commands.
 
+### 🌐 Part of the [V2Hub Ecosystem](https://github.com/nestthub/nestthub/blob/main/ecosystems/v2hub/README.md)
+
+This package is one component of V2Hub — see the full project overview, architecture, and all related repositories.
+
 ## Features
 
 - 🎨 **Beautiful Output**: Rich formatting with colors and tables
