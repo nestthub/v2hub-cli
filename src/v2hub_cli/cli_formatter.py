@@ -155,19 +155,26 @@ class OutputFormatter:
         Returns:
             Configured rich Table
         """
+        show_provider_column = any(getattr(sub, "provider_name", None) for sub in subscriptions)
+
         table = Table(title=title, box=box.ROUNDED)
         table.add_column("Name", style="cyan")
         table.add_column("Token", style="green")
         table.add_column("Sources", justify="right", style="yellow")
         table.add_column("Description", style="white")
+        if show_provider_column:
+            table.add_column("Provider", style="magenta")
 
         for sub in subscriptions:
-            table.add_row(
+            row = [
                 self._safe_str(getattr(sub, "name", None)),
                 self._safe_str(getattr(sub, "token", None)),
                 self._safe_str(getattr(sub, "sources_count", None)),
                 self._safe_str(getattr(sub, "description", None)),
-            )
+            ]
+            if show_provider_column:
+                row.append(self._safe_str(getattr(sub, "provider_name", None)))
+            table.add_row(*row)
 
         return table
 
@@ -256,6 +263,32 @@ class OutputFormatter:
             )
         )
 
+    def show_provider_connection(self, connection: Any, *, title: str = "🔗 Connection") -> None:
+        """
+        Display a provider connection's status for a given user.
+
+        Args:
+            connection: A ProviderConnectionResponse-like object with
+                `user_id` and `status` attributes.
+            title: Panel title.
+        """
+        status = getattr(connection, "status", None)
+        status_str = getattr(status, "value", status)
+
+        style = {
+            "approved": "green",
+            "revoked": "red",
+        }.get(str(status_str), "yellow")
+
+        self.console.print(
+            Panel(
+                f"User ID: [cyan]{self._safe_str(getattr(connection, 'user_id', None))}[/cyan]\n"
+                f"Status: [{style}]{self._safe_str(status_str)}[/{style}]",
+                title=title,
+                border_style=style,
+            )
+        )
+
     def show_subscription_detail(self, subscription: Subscription) -> None:
         """
         Display detailed subscription information.
@@ -264,10 +297,14 @@ class OutputFormatter:
             subscription: Subscription to display
         """
 
+        provider_name = getattr(subscription, "provider_name", None)
+        provider_line = f"Provider: [magenta]{provider_name}[/magenta]\n" if provider_name else ""
+
         self.console.print(
             Panel(
                 f"[bold cyan]{getattr(subscription, 'name', '-')}[/bold cyan]\n"
                 f"Token: [green]{getattr(subscription, 'token', '-')}[/green]\n"
+                f"{provider_line}"
                 f"Description: {getattr(subscription, 'description', '-') or '-'}\n"
                 f"Total configs: [yellow]{getattr(subscription, 'sources_count', '-')}[/yellow]\n"
                 f"Created: {getattr(subscription, 'created_at', '-')}\n"

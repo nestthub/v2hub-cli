@@ -137,7 +137,7 @@ class TestGetCommand:
         result = runner.invoke(cli.app, ["get", "tok_123"])
         assert result.exit_code == 0
         assert "detail-sub" in result.stdout
-        client.get_subscription.assert_called_once_with("tok_123")
+        client.get_subscription.assert_called_once_with("tok_123", as_provider_for_user_id=None)
 
 
 class TestAddSourcesCommand:
@@ -176,7 +176,9 @@ class TestRemoveSourcesCommand:
 
         result = runner.invoke(cli.app, ["remove-sources", "tok_123", "-s", "vless://x", "--force"])
         assert result.exit_code == 0
-        client.remove_sources.assert_called_once_with("tok_123", ["vless://x"])
+        client.remove_sources.assert_called_once_with(
+            "tok_123", ["vless://x"], as_provider_for_user_id=None
+        )
 
     def test_without_force_prompts_and_cancels_on_no(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = MagicMock()
@@ -210,7 +212,7 @@ class TestDeleteCommand:
 
         result = runner.invoke(cli.app, ["delete", "tok_123", "--force"])
         assert result.exit_code == 0
-        client.delete_subscription.assert_called_once_with("tok_123")
+        client.delete_subscription.assert_called_once_with("tok_123", as_provider_for_user_id=None)
 
     def test_cancels_without_confirmation(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = MagicMock()
@@ -241,7 +243,9 @@ class TestUpdateCommand:
         result = runner.invoke(cli.app, ["update", "tok_123", "--name", "renamed"])
         assert result.exit_code == 0
         assert "Subscription updated" in result.stdout
-        client.update_subscription.assert_called_once_with("tok_123", "renamed", None)
+        client.update_subscription.assert_called_once_with(
+            "tok_123", "renamed", None, as_provider_for_user_id=None
+        )
 
     def test_updates_description(self, monkeypatch: pytest.MonkeyPatch) -> None:
         client = MagicMock()
@@ -249,7 +253,9 @@ class TestUpdateCommand:
 
         result = runner.invoke(cli.app, ["update", "tok_123", "--description", "new desc"])
         assert result.exit_code == 0
-        client.update_subscription.assert_called_once_with("tok_123", None, "new desc")
+        client.update_subscription.assert_called_once_with(
+            "tok_123", None, "new desc", as_provider_for_user_id=None
+        )
 
 
 class TestUpdateConfigCommand:
@@ -271,7 +277,12 @@ class TestUpdateConfigCommand:
         )
         assert result.exit_code == 0
         client.update_source.assert_called_once_with(
-            "tok_123", "cfg1", comment="new comment", is_hidden=None, max_depth=None
+            "tok_123",
+            "cfg1",
+            comment="new comment",
+            is_hidden=None,
+            max_depth=None,
+            as_provider_for_user_id=None,
         )
 
     def test_updates_hidden_flag(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -281,7 +292,12 @@ class TestUpdateConfigCommand:
         result = runner.invoke(cli.app, ["update-config", "tok_123", "-i", "cfg1", "--hidden"])
         assert result.exit_code == 0
         client.update_source.assert_called_once_with(
-            "tok_123", "cfg1", comment=None, is_hidden=True, max_depth=None
+            "tok_123",
+            "cfg1",
+            comment=None,
+            is_hidden=True,
+            max_depth=None,
+            as_provider_for_user_id=None,
         )
 
     def test_updates_max_depth(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -293,7 +309,12 @@ class TestUpdateConfigCommand:
         )
         assert result.exit_code == 0
         client.update_source.assert_called_once_with(
-            "tok_123", "cfg1", comment=None, is_hidden=None, max_depth=2
+            "tok_123",
+            "cfg1",
+            comment=None,
+            is_hidden=None,
+            max_depth=2,
+            as_provider_for_user_id=None,
         )
 
     def test_max_depth_out_of_range_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -314,7 +335,9 @@ class TestUpdateCommentDeprecatedCommand:
         result = runner.invoke(cli.app, ["update-comment", "tok_123", "-i", "cfg1", "-c", "hello"])
         assert result.exit_code == 0
         assert "deprecated" in result.stdout.lower()
-        client.update_comment.assert_called_once_with("tok_123", "cfg1", "hello")
+        client.update_comment.assert_called_once_with(
+            "tok_123", "cfg1", "hello", as_provider_for_user_id=None
+        )
 
 
 class TestRefreshCommand:
