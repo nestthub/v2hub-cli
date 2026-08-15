@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import typer
 from rich import box
@@ -24,6 +24,8 @@ console = Console()
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from v2hub_admin import AdminClient as AdminClientType
 
 AdminClient: Any = None
 try:
@@ -60,7 +62,7 @@ def get_admin_client(
     base_url: str | None,
     secret_key: str | None,
     timeout: float = 30.0,
-) -> Iterator[AdminClient]:
+) -> Iterator[AdminClientType]:
     if not ADMIN_CLI_AVAILABLE:
         _fail("Error: package 'v2hub_admin' is not installed. Install it to use admin commands.")
 
@@ -76,11 +78,14 @@ def get_admin_client(
             "Use --secret-key or V2HUB_ADMIN_SECRET environment variable."
         )
 
-    client = AdminClient(
-        base_url=resolved_base_url,
-        secret_key=resolved_secret_key,
-        timeout=timeout,
-        retry_config=RetryConfig(),
+    client = cast(
+        "AdminClientType",
+        AdminClient(
+            base_url=resolved_base_url,
+            secret_key=resolved_secret_key,
+            timeout=timeout,
+            retry_config=RetryConfig(),
+        ),
     )
 
     try:
@@ -261,6 +266,359 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
                             ("User ID", str(user_id)),
                             ("New token", str(getattr(result, "new_api_token", "-"))),
                         ],
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("create-provider")
+    def create_provider(
+        owner_hash: str = typer.Argument(..., help="Provider owner's hash"),
+        provider_name: str = typer.Argument(..., help="Provider name"),
+        provider_url: str | None = typer.Option(
+            None,
+            "--provider-url",
+            "-l",
+            help="Provider URL",
+        ),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.create_provider(
+                    owner_hash=owner_hash,
+                    provider_name=provider_name,
+                    provider_url=provider_url,
+                )
+
+                rows = [
+                    ("Provider Hash", str(getattr(result, "provider_hash", "-"))),
+                    ("Owner Hash", str(getattr(result, "owner_hash", owner_hash))),
+                    ("Provider Name", str(getattr(result, "provider_name", provider_name))),
+                    ("Provider URL", str(getattr(result, "provider_url", provider_url or "-"))),
+                    ("Active", str(getattr(result, "is_active", "-"))),
+                    ("API Token", str(getattr(result, "api_token", "-"))),
+                ]
+
+                console.print(key_value_table("🏢 Provider Created", rows))
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("get-providers")
+    def get_providers(
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.get_providers()
+
+                providers = result.provider_hashes
+
+                if not providers:
+                    console.print("[yellow]No providers found[/yellow]")
+                    return
+
+                title = f"✅ Providers ({len(providers)})"
+
+                table = Table(title=title, box=box.ROUNDED)
+                table.add_column("Name", style="cyan")
+                table.add_column("Hash", style="white")
+
+                for provider_name, provider_hash in providers.items():
+                    table.add_row(
+                        str(provider_name),
+                        str(provider_hash),
+                    )
+
+                console.print(table)
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("get-provider")
+    def get_provider(
+        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.get_provider(provider_hash)
+
+                rows = [
+                    ("Provider Hash", str(getattr(result, "provider_hash", provider_hash))),
+                    ("Owner Hash", str(getattr(result, "owner_hash", "-"))),
+                    ("Provider Name", str(getattr(result, "provider_name", "-"))),
+                    ("Provider URL", str(getattr(result, "provider_url", "-"))),
+                    ("Active", str(getattr(result, "is_active", "-"))),
+                ]
+
+                if hasattr(result, "api_token"):
+                    rows.append(("API Token", str(result.api_token)))
+
+                console.print(key_value_table("🏢 Provider Info", rows))
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("delete-provider")
+    def delete_provider(
+        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                client.delete_provider(provider_hash)
+
+                console.print(
+                    key_value_table(
+                        "🗑 Provider Deleted",
+                        [
+                            ("Provider Hash", provider_hash),
+                            ("Status", "Deleted"),
+                        ],
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("set-provider-status")
+    def set_provider_status(
+        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        is_active: bool = typer.Option(
+            ...,
+            "--active/--inactive",
+            help="Set provider status",
+        ),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.set_provider_status(
+                    provider_hash,
+                    is_active,
+                )
+
+                rows = [
+                    ("Provider Hash", str(getattr(result, "provider_hash", provider_hash))),
+                    ("Active", str(getattr(result, "is_active", is_active))),
+                ]
+
+                if hasattr(result, "provider_name"):
+                    rows.append(("Provider Name", str(result.provider_name)))
+
+                console.print(
+                    key_value_table(
+                        "🔄 Provider Status Updated",
+                        rows,
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("update-provider-url")
+    def update_provider_url(
+        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        provider_url: str = typer.Option(
+            ...,
+            "--provider-url",
+            "-l",
+            help="Update provider url",
+        ),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.update_provider_url(
+                    provider_hash,
+                    provider_url,
+                )
+
+                rows = [
+                    ("Provider Hash", str(getattr(result, "provider_hash", provider_hash))),
+                    ("Provider URL", str(getattr(result, "provider_url", provider_url))),
+                ]
+
+                if hasattr(result, "provider_name"):
+                    rows.append(("Provider Name", str(result.provider_name)))
+
+                console.print(
+                    key_value_table(
+                        "🔄 Provider URL updated",
+                        rows,
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("refresh-provider-token")
+    def refresh_provider_token(
+        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.refresh_provider_token(provider_hash)
+
+                console.print(
+                    key_value_table(
+                        "🔑 Provider Token Refreshed",
+                        [
+                            ("Provider Hash", provider_hash),
+                            (
+                                "New Token",
+                                str(getattr(result, "new_api_token", "-")),
+                            ),
+                        ],
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("update-provider-name")
+    def update_provider_name(
+        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        provider_name: str = typer.Option(
+            ...,
+            "--provider-name",
+            "-n",
+            help="Update provider name",
+        ),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.update_provider_name(
+                    provider_hash,
+                    provider_name,
+                )
+
+                rows = [
+                    ("Provider Hash", str(getattr(result, "provider_hash", provider_hash))),
+                    ("Provider Name", str(getattr(result, "provider_name", provider_name))),
+                ]
+
+                console.print(
+                    key_value_table(
+                        "🔄 Provider name updated",
+                        rows,
                     )
                 )
 

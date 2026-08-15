@@ -7,7 +7,7 @@ Provides consistent, beautiful console output using rich.
 from __future__ import annotations
 
 import textwrap
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 try:
     from rich import box
@@ -26,22 +26,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
     from v2hub.models import Subscription
-else:
-    Subscription = Any
 
 __all__ = ["OutputFormatter"]
-
-
-class HasBanEntry(Protocol):
-    ip_address: Any
-    banned_until: Any
-    remaining_seconds: Any
-
-
-class HasWhitelistEntry(Protocol):
-    ip_address: Any
-    description: Any
-    added_at: Any
 
 
 class OutputFormatter:
@@ -160,7 +146,7 @@ class OutputFormatter:
         table = Table(title=title, box=box.ROUNDED)
         table.add_column("Name", style="cyan")
         table.add_column("Token", style="green")
-        table.add_column("Sources", justify="right", style="yellow")
+        table.add_column("Configs", justify="right", style="yellow")
         table.add_column("Description", style="white")
         if show_provider_column:
             table.add_column("Provider", style="magenta")
@@ -175,72 +161,6 @@ class OutputFormatter:
             if show_provider_column:
                 row.append(self._safe_str(getattr(sub, "provider_name", None)))
             table.add_row(*row)
-
-        return table
-
-    def create_ban_table(
-        self,
-        bans: Sequence[HasBanEntry],
-        *,
-        total: int | None = None,
-    ) -> Table:
-        """
-        Create formatted ban list table.
-
-        Args:
-            bans: List of ban entries
-            total: Total count for title
-
-        Returns:
-            Configured rich Table
-        """
-
-        title = f"🚫 Bans ({total})" if total is not None else "🚫 Bans"
-
-        table = Table(title=title, box=box.ROUNDED)
-        table.add_column("IP", style="cyan")
-        table.add_column("Until", style="yellow")
-        table.add_column("Remaining", justify="right", style="green")
-
-        for ban in bans:
-            table.add_row(
-                self._safe_str(getattr(ban, "ip_address", None)),
-                self._safe_str(getattr(ban, "banned_until", None)),
-                self._safe_str(getattr(ban, "remaining_seconds", None)),
-            )
-
-        return table
-
-    def create_whitelist_table(
-        self,
-        entries: Sequence[HasWhitelistEntry],
-        *,
-        total: int | None = None,
-    ) -> Table:
-        """
-        Create formatted whitelist table.
-
-        Args:
-            entries: List of whitelist entries
-            total: Total count for title
-
-        Returns:
-            Configured rich Table
-        """
-
-        title = f"✅ Whitelist ({total})" if total is not None else "✅ Whitelist"
-
-        table = Table(title=title, box=box.ROUNDED)
-        table.add_column("IP/CIDR", style="cyan")
-        table.add_column("Description", style="white")
-        table.add_column("Added At", style="yellow")
-
-        for entry in entries:
-            table.add_row(
-                self._safe_str(getattr(entry, "ip_address", None)),
-                self._safe_str(getattr(entry, "description", None)),
-                self._safe_str(getattr(entry, "added_at", None)),
-            )
 
         return table
 

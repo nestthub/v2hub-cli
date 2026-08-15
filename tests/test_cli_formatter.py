@@ -166,40 +166,6 @@ class TestCreateSubscriptionTable:
         assert table.title == "My Subs"
 
 
-class TestCreateBanTable:
-    def test_title_without_total(self, formatter: OutputFormatter) -> None:
-        table = formatter.create_ban_table([])
-        assert table.title == "🚫 Bans"
-
-    def test_title_with_total(self, formatter: OutputFormatter) -> None:
-        table = formatter.create_ban_table([], total=7)
-        assert table.title == "🚫 Bans (7)"
-
-    def test_populates_rows(self, formatter: OutputFormatter) -> None:
-        ban = types.SimpleNamespace(
-            ip_address="1.2.3.4", banned_until="2026-01-01", remaining_seconds=3600
-        )
-        table = formatter.create_ban_table([ban], total=1)
-        assert table.row_count == 1
-
-
-class TestCreateWhitelistTable:
-    def test_title_without_total(self, formatter: OutputFormatter) -> None:
-        table = formatter.create_whitelist_table([])
-        assert table.title == "✅ Whitelist"
-
-    def test_title_with_total(self, formatter: OutputFormatter) -> None:
-        table = formatter.create_whitelist_table([], total=3)
-        assert table.title == "✅ Whitelist (3)"
-
-    def test_populates_rows(self, formatter: OutputFormatter) -> None:
-        entry = types.SimpleNamespace(
-            ip_address="10.0.0.0/8", description="internal", added_at="2026-01-01"
-        )
-        table = formatter.create_whitelist_table([entry])
-        assert table.row_count == 1
-
-
 class TestShowVersion:
     def test_shows_all_versions(self, formatter: OutputFormatter, console: Console) -> None:
         formatter.show_version({"v2hub": "1.0.0", "v2hub-cli": "1.0.3", "v2hub-admin": "2.0.0"})
