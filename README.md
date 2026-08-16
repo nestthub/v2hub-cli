@@ -11,9 +11,9 @@ This package is one component of V2Hub — see the full project overview, archit
 - 🎨 **Beautiful Output**: Rich formatting with colors and tables
 - ⚡ **Fast & Intuitive**: Simple commands for all operations
 - 🔧 **Regular Commands**: Full access to subscription management
-- 🔐 **Admin Commands**: Optional admin operations (requires v2hub-admin)
-- 📋 **Multiple Formats**: JSON, table, or minimal output
-- 🎯 **Type Safe**: Auto-completion support
+- 🤝 **Provider Commands**: Manage subscriptions on behalf of end-users (`v2hub provider <user_id> ...`)
+- 🔐 **Admin Commands**: Optional admin operations (requires v2hub-admin) — users, providers, IP bans, whitelist
+- 🎯 **Type Safe**: Full type hints, powered by Typer
 
 ## Installation
 
@@ -55,10 +55,10 @@ v2hub create "my-vpn"
 v2hub get <token>
 
 # Add sources to subscription
-v2hub add-sources <token> -s vless://server1 vmess://server2
+v2hub add-sources <token> -s vless://server1 -s vmess://server2
 
-# Get subscription config URL
-v2hub config <token>
+# Refresh external URL sources
+v2hub refresh <token>
 
 # Delete subscription
 v2hub delete <token>
@@ -66,55 +66,85 @@ v2hub delete <token>
 
 ### Admin Commands
 
-Admin commands are available only if `v2hub-admin` is installed:
+Admin commands are available only if `v2hub-admin` is installed. They use `--secret-key`/`V2HUB_ADMIN_SECRET` (HMAC auth) instead of `--api-token`:
 
 ```bash
 # Show admin help
 v2hub admin --help
 
-# Show admin version
+# Show admin module version
 v2hub admin version
 
-# List all subscriptions in the system (admin)
-v2hub admin list-all
+# User management
+v2hub admin create-user <user_id>
+v2hub admin get-user <user_id>
+v2hub admin delete-user <user_id>
+v2hub admin set-user-status <user_id> --active|--inactive
+v2hub admin refresh-token <user_id>
 
-# Get any subscription (bypass ownership)
-v2hub admin get <token>
+# Provider management
+v2hub admin create-provider <owner_hash> <provider_name> [--provider-url <url>]
+v2hub admin get-providers
+v2hub admin get-provider <provider_hash>
+v2hub admin delete-provider <provider_hash>
+v2hub admin set-provider-status <provider_hash> --active|--inactive
+v2hub admin update-provider-url <provider_hash> --provider-url <url>
+v2hub admin update-provider-name <provider_hash> --provider-name <name>
+v2hub admin refresh-provider-token <provider_hash>
 
-# Delete any subscription (admin privilege)
-v2hub admin delete <token>
+# IP ban management
+v2hub admin ban-ip <ip_address> [--duration <seconds>]
+v2hub admin unban-ip <ip_address>
+v2hub admin ban-status <ip_address>
+v2hub admin ban-list
 
-# Get system statistics
-v2hub admin stats
+# Whitelist management
+v2hub admin whitelist-add <ip_or_cidr> [--description <text>]
+v2hub admin whitelist-remove <ip_or_cidr>
+v2hub admin whitelist-list
 ```
+
+### Provider Commands
+
+If your API token belongs to a **provider** account, `v2hub provider <user_id> ...` manages subscriptions on behalf of a specific end-user. Every top-level subscription command has a provider-scoped counterpart, plus connection lifecycle commands:
+
+```bash
+# Connection lifecycle
+v2hub provider <user_id> connection-get
+v2hub provider <user_id> connection-create
+v2hub provider <user_id> connection-revoke [--force]
+v2hub provider <user_id> connection-delete [--force]
+
+# Subscriptions, scoped to that user
+v2hub provider <user_id> list
+v2hub provider <user_id> create "vpn-name" -s vless://server1
+v2hub provider <user_id> get <token>
+v2hub provider <user_id> add-sources <token> -s vless://server1
+v2hub provider <user_id> replace-sources <token> -s vless://server1
+v2hub provider <user_id> remove-sources <token> -s <source-id> [--force]
+v2hub provider <user_id> delete <token> [--force]
+v2hub provider <user_id> update <token> --name "new-name"
+v2hub provider <user_id> update-config <token> --config-id <id> [--hidden/--visible] [--max-depth 0-3]
+v2hub provider <user_id> refresh <token>
+```
+
+An approved connection (`connection-create`) must exist before any of the subscription commands above will succeed for that `user_id`.
 
 ### Environment Variables
 
-Configure the CLI using environment variables:
+Configure the CLI using environment variables (there is no config file — every command also accepts `--base-url`/`-u` and `--api-token`/`-t` directly, which take precedence over the env vars):
 
 ```bash
 # Required
 export V2HUB_API_URL="https://api.example.com"
 export V2HUB_API_TOKEN="your-api-token"
 
-# For admin commands (optional)
+# For admin commands (optional, uses --secret-key / -k instead of --api-token)
 export V2HUB_ADMIN_SECRET="your-hmac-secret"
 
 # Then use commands
 v2hub list
-v2hub admin list-all  # if v2hub-admin is installed
-```
-
-### Configuration File
-
-Create `~/.v2hub/config.json`:
-
-```json
-{
-  "api_url": "https://api.example.com",
-  "api_token": "your-api-token",
-  "admin_secret": "your-hmac-secret"
-}
+v2hub admin get-user 12345  # if v2hub-admin is installed
 ```
 
 ## Examples
@@ -123,18 +153,15 @@ Create `~/.v2hub/config.json`:
 
 ```bash
 # Create subscription
-v2hub create "work-vpn" --comment "Office VPN servers"
+v2hub create "work-vpn" --description "Office VPN servers"
 
 # Add sources
-v2hub add-sources <token> -s\
-  vless://server1.example.com:443 \
-  vmess://server2.example.com:443
+v2hub add-sources <token> \
+  -s vless://server1.example.com:443 \
+  -s vmess://server2.example.com:443
 
-# View sources
-v2hub sources <token>
-
-# Get config URL
-v2hub config <token>
+# View subscription details, including its sources
+v2hub get <token>
 ```
 
 ### List and Filter
@@ -142,9 +169,6 @@ v2hub config <token>
 ```bash
 # List all your subscriptions
 v2hub list
-
-# List with JSON output
-v2hub list --format json
 
 # Get specific subscription
 v2hub get <token>
@@ -156,82 +180,105 @@ v2hub get <token>
 # Update name
 v2hub update <token> --name "new-name"
 
-# Update comment
-v2hub update <token> --comment "Updated description"
+# Update description
+v2hub update <token> --description "Updated description"
+
+# Update a specific config's comment/visibility/nesting depth
+v2hub update-config <token> --config-id <id> --comment "Server 1" --hidden --max-depth 1
 
 # Replace all sources
-v2hub replace-sources <token> vless://new-server
+v2hub replace-sources <token> -s vless://new-server
 ```
 
 ### Admin Operations
 
 ```bash
-# List all subscriptions (requires admin)
-v2hub admin list-all
+# Create a user (requires admin)
+v2hub admin create-user 12345
 
-# Get any subscription (requires admin)
-v2hub admin get <any-token>
+# Get user info (requires admin)
+v2hub admin get-user 12345
 
-# Delete any subscription (requires admin)
-v2hub admin delete <any-token>
+# Ban an IP for 1 hour (requires admin)
+v2hub admin ban-ip 192.168.1.100 --duration 3600
 
-# System statistics (requires admin)
-v2hub admin stats
+# List whitelist entries (requires admin)
+v2hub admin whitelist-list
 ```
 
-## Output Formats
+## Output
 
-The CLI supports multiple output formats:
-
-```bash
-# Table format (default, rich formatting)
-v2hub list
-
-# JSON format (for scripting)
-v2hub list --format json
-
-# Minimal format (just values)
-v2hub list --format minimal
-```
+Subscription listings are rendered as a Rich-formatted table; single-resource commands (`get`, `create`, `update`, etc.) print a key/value panel. There is currently no `--format` flag — for scripting, parse the plain text output or use the Python `v2hub` client directly.
 
 ## Command Reference
 
 ### Regular Commands
 
-| Command                                  | Description              |
-| ---------------------------------------- | ------------------------ |
-| `v2hub version`                          | Show version information |
-| `v2hub list`                             | List your subscriptions  |
-| `v2hub create <name>`                    | Create new subscription  |
-| `v2hub get <token>`                      | Get subscription details |
-| `v2hub update <token>`                   | Update subscription      |
-| `v2hub delete <token>`                   | Delete subscription      |
-| `v2hub add-sources <token> <uri...>`     | Add sources              |
-| `v2hub remove-sources <token> <uri...>`  | Remove sources           |
-| `v2hub replace-sources <token> <uri...>` | Replace all sources      |
-| `v2hub sources <token>`                  | List sources             |
-| `v2hub config <token>`                   | Get subscription config  |
-| `v2hub refresh <token>`                  | Refresh subscription     |
+| Command                                     | Description                                |
+| ------------------------------------------- | ------------------------------------------ |
+| `v2hub version`                             | Show version information                   |
+| `v2hub list`                                | List your subscriptions                    |
+| `v2hub create <name>`                       | Create new subscription                    |
+| `v2hub get <token>`                         | Get subscription details                   |
+| `v2hub update <token>`                      | Update subscription name/description       |
+| `v2hub update-config <token>`               | Update a config's comment/visibility/depth |
+| `v2hub delete <token>`                      | Delete subscription                        |
+| `v2hub add-sources <token> -s <uri>...`     | Add sources                                |
+| `v2hub remove-sources <token> -s <id>...`   | Remove sources                             |
+| `v2hub replace-sources <token> -s <uri>...` | Replace all sources                        |
+| `v2hub refresh <token>`                     | Refresh external URL sources               |
+
+### Provider Commands
+
+| Command                                            | Description                             |
+| -------------------------------------------------- | --------------------------------------- |
+| `v2hub provider <user_id> connection-get`          | Get authorization status for a user     |
+| `v2hub provider <user_id> connection-create`       | Create/re-approve authorization         |
+| `v2hub provider <user_id> connection-revoke`       | Revoke authorization                    |
+| `v2hub provider <user_id> connection-delete`       | Permanently delete authorization record |
+| `v2hub provider <user_id> list`                    | List that user's subscriptions          |
+| `v2hub provider <user_id> create <name>`           | Create subscription for that user       |
+| `v2hub provider <user_id> get <token>`             | Get their subscription details          |
+| `v2hub provider <user_id> update <token>`          | Update their subscription               |
+| `v2hub provider <user_id> update-config <token>`   | Update a config on their subscription   |
+| `v2hub provider <user_id> delete <token>`          | Delete their subscription               |
+| `v2hub provider <user_id> add-sources <token>`     | Add sources                             |
+| `v2hub provider <user_id> replace-sources <token>` | Replace sources                         |
+| `v2hub provider <user_id> remove-sources <token>`  | Remove sources                          |
+| `v2hub provider <user_id> refresh <token>`         | Refresh external URL sources            |
 
 ### Admin Commands (Optional)
 
-| Command                      | Description                     |
-| ---------------------------- | ------------------------------- |
-| `v2hub admin --help`         | Show admin commands help        |
-| `v2hub admin version`        | Show admin module version       |
-| `v2hub admin list-all`       | List all subscriptions (admin)  |
-| `v2hub admin get <token>`    | Get any subscription (admin)    |
-| `v2hub admin delete <token>` | Delete any subscription (admin) |
-| `v2hub admin stats`          | System statistics (admin)       |
+| Command                                              | Description                   |
+| ---------------------------------------------------- | ----------------------------- |
+| `v2hub admin --help`                                 | Show admin commands help      |
+| `v2hub admin version`                                | Show admin module version     |
+| `v2hub admin create-user <user_id>`                  | Create user                   |
+| `v2hub admin get-user <user_id>`                     | Get user info                 |
+| `v2hub admin delete-user <user_id>`                  | Delete user                   |
+| `v2hub admin set-user-status <user_id>`              | Activate/deactivate user      |
+| `v2hub admin refresh-token <user_id>`                | Refresh user's API token      |
+| `v2hub admin create-provider <owner_hash> <name>`    | Create provider account       |
+| `v2hub admin get-providers`                          | List all providers            |
+| `v2hub admin get-provider <provider_hash>`           | Get provider info             |
+| `v2hub admin delete-provider <provider_hash>`        | Delete provider               |
+| `v2hub admin set-provider-status <provider_hash>`    | Activate/deactivate provider  |
+| `v2hub admin update-provider-url <provider_hash>`    | Update provider URL           |
+| `v2hub admin update-provider-name <provider_hash>`   | Update provider name          |
+| `v2hub admin refresh-provider-token <provider_hash>` | Refresh provider's API token  |
+| `v2hub admin ban-ip <ip_address>`                    | Ban an IP address             |
+| `v2hub admin unban-ip <ip_address>`                  | Unban an IP address           |
+| `v2hub admin ban-status <ip_address>`                | Check an IP's ban status      |
+| `v2hub admin ban-list`                               | List banned IPs               |
+| `v2hub admin whitelist-add <ip_or_cidr>`             | Add IP/CIDR to whitelist      |
+| `v2hub admin whitelist-remove <ip_or_cidr>`          | Remove IP/CIDR from whitelist |
+| `v2hub admin whitelist-list`                         | List whitelisted IPs          |
 
 ## Exit Codes
 
 - `0` - Success
-- `1` - General error
-- `2` - Invalid command or arguments
-- `3` - Authentication error
-- `4` - Not found error
-- `5` - API error
+- `1` - Error (authentication, not found, validation, or any other API/CLI error — the CLI does not currently distinguish error types by exit code)
+- `2` - Invalid command or arguments (raised by Typer/Click itself)
 
 ## Development
 
@@ -260,21 +307,20 @@ If admin module is not installed, admin commands are automatically hidden and di
 
 ## Requirements
 
-- **v2hub** >= 1.0.0 (required, installed automatically)
-- **v2hub-admin** >= 1.0.0 (optional, for admin commands)
-- Python >= 3.9
+- **v2hub** (required, installed automatically)
+- **v2hub-admin** >= 1.1.1, < 2.0.0 (optional, for admin commands)
+- Python >= 3.10
 
 ## Graceful Admin Fallback
 
-When `v2hub-admin` is not installed:
+When `v2hub-admin` is not installed, the `admin` command group is hidden from `v2hub --help`, but `v2hub admin version` still works and reports the situation:
 
 ```bash
-$ v2hub admin --help
-Error: Admin commands require the 'v2hub-admin' package.
-Install it with: pip install v2hub-admin
+$ v2hub admin version
+Error: admin client is not available. Install 'v2hub_admin'.
 
 $ v2hub --help
-# Shows only regular commands, admin section is hidden
+# Shows only regular and provider commands; the admin section is hidden
 ```
 
 ## License
