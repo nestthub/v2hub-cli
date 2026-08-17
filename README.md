@@ -39,6 +39,48 @@ After installation, the `v2hub` command is available:
 v2hub --help
 ```
 
+### Shell Autocompletion
+
+`v2hub` supports tab-completion of commands, subcommands, options, and —
+where it can — real values pulled live from the API: subscription
+tokens, config hashes, provider hashes, and banned/whitelisted IPs. This
+works the same way `git` does — type a partial command, press `Tab`,
+and either complete it or cycle through matching suggestions.
+
+Completion is set up automatically the first time you run `v2hub` in an
+interactive shell (bash, zsh, or fish) — nothing to install or type.
+Just restart your shell (or open a new terminal) after the first run,
+then try:
+
+```bash
+v2hub get<TAB>                 # -> suggests real subscription tokens
+v2hub update-config <token> --config-id <TAB>   # -> suggests config hashes for that subscription
+v2hub provider <TAB>
+```
+
+In shells that support it (zsh, fish — not bash, which has no
+equivalent display), each suggestion is shown together with a short
+hint so you can tell entries apart, e.g. a subscription token next to
+its name, or a config hash next to its comment/URL:
+
+```
+abc123de…  My Personal VPN
+f91a02bb…  My Work VPN
+```
+
+Only the value itself (the token or hash) is ever inserted — the hint
+is just there to help you pick the right one.
+
+If you'd rather manage this yourself, opt out of the automatic setup
+with `export V2HUB_NO_AUTOCOMPLETE=1`, then install (or print) the
+completion script manually:
+
+```bash
+v2hub --install-completion         # install for your current shell
+v2hub --show-completion            # print the script for your shell
+v2hub --show-completion bash       # or force a specific shell
+```
+
 ### Basic Commands
 
 ```bash

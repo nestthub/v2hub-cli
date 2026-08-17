@@ -20,6 +20,11 @@ from rich.table import Table
 
 from v2hub.core.exceptions import VPNAPIError
 from v2hub.core.retry import RetryConfig
+from v2hub_cli.cli_completion import (
+    complete_banned_ip,
+    complete_provider_hash,
+    complete_whitelisted_ip,
+)
 
 console = Console()
 
@@ -371,7 +376,9 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
     @admin_app.command("get-provider")
     def get_provider(
-        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        provider_hash: str = typer.Argument(
+            ..., help="Provider hash", shell_complete=complete_provider_hash
+        ),
         base_url: str | None = typer.Option(
             None,
             "--base-url",
@@ -410,7 +417,9 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
     @admin_app.command("delete-provider")
     def delete_provider(
-        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        provider_hash: str = typer.Argument(
+            ..., help="Provider hash", shell_complete=complete_provider_hash
+        ),
         base_url: str | None = typer.Option(
             None,
             "--base-url",
@@ -446,7 +455,9 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
     @admin_app.command("set-provider-status")
     def set_provider_status(
-        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        provider_hash: str = typer.Argument(
+            ..., help="Provider hash", shell_complete=complete_provider_hash
+        ),
         is_active: bool = typer.Option(
             ...,
             "--active/--inactive",
@@ -495,7 +506,9 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
     @admin_app.command("update-provider-url")
     def update_provider_url(
-        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        provider_hash: str = typer.Argument(
+            ..., help="Provider hash", shell_complete=complete_provider_hash
+        ),
         provider_url: str = typer.Option(
             ...,
             "--provider-url",
@@ -545,7 +558,9 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
     @admin_app.command("update-provider-name")
     def update_provider_name(
-        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        provider_hash: str = typer.Argument(
+            ..., help="Provider hash", shell_complete=complete_provider_hash
+        ),
         provider_name: str = typer.Option(
             ...,
             "--provider-name",
@@ -592,7 +607,9 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
     @admin_app.command("refresh-provider-token")
     def refresh_provider_token(
-        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        provider_hash: str = typer.Argument(
+            ..., help="Provider hash", shell_complete=complete_provider_hash
+        ),
         base_url: str | None = typer.Option(
             None,
             "--base-url",
@@ -662,7 +679,9 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
     @admin_app.command("unban-ip")
     def unban_ip(
-        ip_address: str = typer.Argument(..., help="IP address to unban"),
+        ip_address: str = typer.Argument(
+            ..., help="IP address to unban", shell_complete=complete_banned_ip
+        ),
         base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
         secret_key: str | None = typer.Option(None, "--secret-key", "-k", help="Admin secret key"),
     ) -> None:
@@ -688,7 +707,9 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
     @admin_app.command("ban-status")
     def ban_status(
-        ip_address: str = typer.Argument(..., help="IP address to check"),
+        ip_address: str = typer.Argument(
+            ..., help="IP address to check", shell_complete=complete_banned_ip
+        ),
         base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
         secret_key: str | None = typer.Option(None, "--secret-key", "-k", help="Admin secret key"),
     ) -> None:
@@ -784,7 +805,9 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
 
     @admin_app.command("whitelist-remove")
     def whitelist_remove(
-        ip_address: str = typer.Argument(..., help="IP or CIDR to remove"),
+        ip_address: str = typer.Argument(
+            ..., help="IP or CIDR to remove", shell_complete=complete_whitelisted_ip
+        ),
         base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
         secret_key: str | None = typer.Option(None, "--secret-key", "-k", help="Admin secret key"),
     ) -> None:
