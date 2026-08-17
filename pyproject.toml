@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "v2hub-cli"
-version = "1.1.1"
+version = "1.1.3"
 description = "Command-line interface for V2Hub VPN Subscription API client"
 readme = "README.md"
 license = { text = "MIT" }
@@ -35,10 +35,11 @@ dependencies = [
 
 [project.optional-dependencies]
 admin = [
-    "v2hub-admin>=1.1.1,<2.0.0",
+    "v2hub-admin>=1.1.2,<2.0.0",
 ]
 dev = [
-    "v2hub-admin>=1.1.1,<2.0.0",
+    "v2hub-admin>=1.1.2,<2.0.0",
+    "click>=8.4.2",
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
@@ -96,6 +97,17 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# `shellingham` (a transitive dependency via `typer`, used directly in
+# cli_autocomplete_setup.py for shell detection) ships neither inline
+# type annotations nor a py.typed marker, and there is no `types-
+# shellingham` stub package on PyPI to install instead. There is
+# nothing to fix here on our end -- silencing this specific,
+# unresolvable import-untyped warning is the correct outcome, not a
+# workaround for a real typing gap in our own code.
+module = "shellingham.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

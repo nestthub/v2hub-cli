@@ -16,6 +16,11 @@ from rich.panel import Panel
 
 from v2hub.models import SourceCreate
 from v2hub_cli import __version__ as cli_version
+from v2hub_cli.cli_completion import (
+    complete_config_hash,
+    complete_provider_subscription_token,
+    complete_subscription_token,
+)
 from v2hub_cli.cli_formatter import OutputFormatter
 from v2hub_cli.cli_manager import ClientManager
 
@@ -25,7 +30,7 @@ if TYPE_CHECKING:
 app = typer.Typer(
     name="v2hub",
     help="VPN Subscription API Client CLI",
-    add_completion=False,
+    add_completion=True,
 )
 
 console = Console()
@@ -524,7 +529,9 @@ def create(
 
 @app.command()
 def get(
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
 ) -> None:
@@ -543,7 +550,9 @@ def get(
 
 @app.command(name="add-sources")
 def add_sources(
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
     sources: list[str] = typer.Option(
         ...,
         "--source",
@@ -571,7 +580,9 @@ def add_sources(
 
 @app.command(name="replace-sources")
 def replace_sources(
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
     sources: list[str] = typer.Option(
         ...,
         "--source",
@@ -599,7 +610,9 @@ def replace_sources(
 
 @app.command(name="remove-sources")
 def remove_sources(
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
     sources: list[str] = typer.Option(..., "--source", "-s", help="Sources to remove"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
@@ -620,7 +633,9 @@ def remove_sources(
 
 @app.command()
 def delete(
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
@@ -640,7 +655,9 @@ def delete(
 
 @app.command()
 def update(
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
     name: str | None = typer.Option(None, "--name", "-n", help="New subscription name"),
     description: str | None = typer.Option(None, "--description", "-d", help="New description"),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
@@ -661,8 +678,12 @@ def update(
 
 @app.command(name="update-config")
 def update_config(
-    token: str = typer.Argument(..., help="Subscription token"),
-    config_id: str = typer.Option(..., "--config-id", "-i", help="Config ID"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
+    config_id: str = typer.Option(
+        ..., "--config-id", "-i", help="Config ID", shell_complete=complete_config_hash
+    ),
     comment: str | None = typer.Option(None, "--comment", "-c", help="New config comment"),
     hidden: bool | None = typer.Option(
         None,
@@ -704,8 +725,12 @@ def update_config(
     help="[Deprecated: use 'update-config' instead] Update comment for a config inside subscription.",
 )
 def update_comment(
-    token: str = typer.Argument(..., help="Subscription token"),
-    config_id: str = typer.Option(..., "--config-id", "-i", help="Config ID"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
+    config_id: str = typer.Option(
+        ..., "--config-id", "-i", help="Config ID", shell_complete=complete_config_hash
+    ),
     comment: str = typer.Option(..., "--comment", "-c", help="New config comment"),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
@@ -732,7 +757,9 @@ def update_comment(
 
 @app.command()
 def refresh(
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
 ) -> None:
@@ -950,7 +977,9 @@ def provider_create(
 @provider_app.command(name="get")
 def provider_get(
     ctx: typer.Context,
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_provider_subscription_token
+    ),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="Provider API token"),
 ) -> None:
@@ -971,7 +1000,9 @@ def provider_get(
 @provider_app.command(name="add-sources")
 def provider_add_sources(
     ctx: typer.Context,
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_provider_subscription_token
+    ),
     sources: list[str] = typer.Option(
         ...,
         "--source",
@@ -1001,7 +1032,9 @@ def provider_add_sources(
 @provider_app.command(name="replace-sources")
 def provider_replace_sources(
     ctx: typer.Context,
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_provider_subscription_token
+    ),
     sources: list[str] = typer.Option(
         ...,
         "--source",
@@ -1031,7 +1064,9 @@ def provider_replace_sources(
 @provider_app.command(name="remove-sources")
 def provider_remove_sources(
     ctx: typer.Context,
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_provider_subscription_token
+    ),
     sources: list[str] = typer.Option(..., "--source", "-s", help="Sources to remove"),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
@@ -1054,7 +1089,9 @@ def provider_remove_sources(
 @provider_app.command(name="delete")
 def provider_delete(
     ctx: typer.Context,
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_provider_subscription_token
+    ),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="Provider API token"),
@@ -1076,7 +1113,9 @@ def provider_delete(
 @provider_app.command(name="update")
 def provider_update(
     ctx: typer.Context,
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_provider_subscription_token
+    ),
     name: str | None = typer.Option(None, "--name", "-n", help="New subscription name"),
     description: str | None = typer.Option(None, "--description", "-d", help="New description"),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
@@ -1099,8 +1138,12 @@ def provider_update(
 @provider_app.command(name="update-config")
 def provider_update_config(
     ctx: typer.Context,
-    token: str = typer.Argument(..., help="Subscription token"),
-    config_id: str = typer.Option(..., "--config-id", "-i", help="Config ID"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_provider_subscription_token
+    ),
+    config_id: str = typer.Option(
+        ..., "--config-id", "-i", help="Config ID", shell_complete=complete_config_hash
+    ),
     comment: str | None = typer.Option(None, "--comment", "-c", help="New config comment"),
     hidden: bool | None = typer.Option(
         None,
@@ -1142,7 +1185,9 @@ def provider_update_config(
 @provider_app.command(name="refresh")
 def provider_refresh(
     ctx: typer.Context,
-    token: str = typer.Argument(..., help="Subscription token"),
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_provider_subscription_token
+    ),
     base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
     api_token: str | None = typer.Option(None, "--api-token", "-t", help="Provider API token"),
 ) -> None:
@@ -1167,6 +1212,9 @@ def provider_refresh(
 
 def main() -> None:
     """Main CLI entry point."""
+    from v2hub_cli.cli_autocomplete_setup import maybe_install_completion
+
+    maybe_install_completion()
     app()
 
 
