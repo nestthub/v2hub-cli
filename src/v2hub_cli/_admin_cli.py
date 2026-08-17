@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any, cast
+from datetime import datetime  # noqa: TC003
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import typer
 from rich import box
@@ -542,45 +543,6 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
         except Exception as e:
             show_error(e)
 
-    @admin_app.command("refresh-provider-token")
-    def refresh_provider_token(
-        provider_hash: str = typer.Argument(..., help="Provider hash"),
-        base_url: str | None = typer.Option(
-            None,
-            "--base-url",
-            "-u",
-            help="API base URL",
-        ),
-        secret_key: str | None = typer.Option(
-            None,
-            "--secret-key",
-            "-k",
-            help="Admin secret key",
-        ),
-    ) -> None:
-        try:
-            with get_admin_client(base_url, secret_key) as client:
-                result = client.refresh_provider_token(provider_hash)
-
-                console.print(
-                    key_value_table(
-                        "🔑 Provider Token Refreshed",
-                        [
-                            ("Provider Hash", provider_hash),
-                            (
-                                "New Token",
-                                str(getattr(result, "new_api_token", "-")),
-                            ),
-                        ],
-                    )
-                )
-
-        except ValueError as e:
-            console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1) from None
-        except Exception as e:
-            show_error(e)
-
     @admin_app.command("update-provider-name")
     def update_provider_name(
         provider_hash: str = typer.Argument(..., help="Provider hash"),
@@ -619,6 +581,45 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
                     key_value_table(
                         "🔄 Provider name updated",
                         rows,
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("refresh-provider-token")
+    def refresh_provider_token(
+        provider_hash: str = typer.Argument(..., help="Provider hash"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.refresh_provider_token(provider_hash)
+
+                console.print(
+                    key_value_table(
+                        "🔑 Provider Token Refreshed",
+                        [
+                            ("Provider Hash", provider_hash),
+                            (
+                                "New Token",
+                                str(getattr(result, "new_api_token", "-")),
+                            ),
+                        ],
                     )
                 )
 
@@ -833,6 +834,83 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
                     )
 
                 console.print(table)
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("stats")
+    def get_stats(
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+        start_date: datetime | None = typer.Option(
+            None,
+            "--start-date",
+            "-s",
+            help="Stats start datetime (ISO 8601)",
+        ),
+        end_date: datetime | None = typer.Option(
+            None,
+            "--end-date",
+            "-e",
+            help="Stats end datetime (ISO 8601)",
+        ),
+        period: Literal["day", "week", "month"] | None = typer.Option(
+            None,
+            "--period",
+            "-p",
+            help="Predefined stats period: day, week, or month",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.get_stats(
+                    start_date=start_date,
+                    end_date=end_date,
+                    period=period,
+                )
+
+                if period:
+                    period_label = {
+                        "day": "Today",
+                        "week": "This week",
+                        "month": "This month",
+                    }[period]
+                elif start_date or end_date:
+                    start_label = (
+                        start_date.strftime("%Y-%m-%d %H:%M:%S") if start_date else "Beginning"
+                    )
+                    end_label = end_date.strftime("%Y-%m-%d %H:%M:%S") if end_date else "Now"
+                    period_label = f"{start_label} → {end_label}"
+                else:
+                    period_label = "All time"
+
+                console.print(
+                    Panel(
+                        f"[bold cyan]👥 Total Users[/bold cyan]      "
+                        f"[bold white]{result.general.total_users:,}[/bold white]\n"
+                        f"[bold green]🆕 New Users[/bold green]        "
+                        f"[bold white]{result.general.new_users:,}[/bold white]\n"
+                        f"[bold yellow]💳 New Subscriptions[/bold yellow] "
+                        f"[bold white]{result.general.new_subscriptions:,}[/bold white]\n\n"
+                        f"[dim]Period: {period_label}[/dim]",
+                        title="📊 API Usage Statistics",
+                        border_style="blue",
+                        expand=False,
+                    )
+                )
 
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
