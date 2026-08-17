@@ -39,8 +39,8 @@ admin = [
 ]
 dev = [
     "v2hub-admin>=1.1.2,<2.0.0",
-    "pytest>=7.4.0",
     "click>=8.4.2",
+    "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "pytest-mock>=3.11.0",
@@ -97,6 +97,17 @@ warn_no_return = true
 warn_unreachable = true
 strict_equality = true
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+# `shellingham` (a transitive dependency via `typer`, used directly in
+# cli_autocomplete_setup.py for shell detection) ships neither inline
+# type annotations nor a py.typed marker, and there is no `types-
+# shellingham` stub package on PyPI to install instead. There is
+# nothing to fix here on our end -- silencing this specific,
+# unresolvable import-untyped warning is the correct outcome, not a
+# workaround for a real typing gap in our own code.
+module = "shellingham.*"
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
