@@ -130,6 +130,16 @@ def key_value_table(title: str, rows: list[tuple[str, str]]) -> Table:
     return table
 
 
+def status_style(status: Any) -> str:
+    """Rich border/text style for a ProviderAuthorizationStatus-like value."""
+    status_str = getattr(status, "value", status)
+    return {
+        "approved": "green",
+        "revoked": "red",
+        "pending": "yellow",
+    }.get(str(status_str), "white")
+
+
 def register_admin_commands(admin_app: typer.Typer) -> bool:
     if not ADMIN_CLI_AVAILABLE:
 
@@ -637,6 +647,375 @@ def register_admin_commands(admin_app: typer.Typer) -> bool:
                                 str(getattr(result, "new_api_token", "-")),
                             ),
                         ],
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    # ─────────────────────── Provider lookups (v2hub-admin >= 1.1.4) ───────────────────────
+
+    @admin_app.command("get-provider-by-name")
+    def get_provider_by_name(
+        provider_name: str = typer.Argument(..., help="Provider name"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.get_provider_by_name(provider_name)
+
+                rows = [
+                    ("Provider Hash", str(getattr(result, "provider_hash", "-"))),
+                    ("Owner Hash", str(getattr(result, "owner_hash", "-"))),
+                    ("Provider Name", str(getattr(result, "provider_name", provider_name))),
+                    ("Provider URL", str(getattr(result, "provider_url", "-"))),
+                    ("Active", str(getattr(result, "is_active", "-"))),
+                ]
+
+                if hasattr(result, "api_token"):
+                    rows.append(("API Token", str(result.api_token)))
+
+                console.print(key_value_table("🏢 Provider Info", rows))
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("get-provider-by-owner-id")
+    def get_provider_by_owner_id(
+        owner_id: int = typer.Argument(..., help="User ID of the provider owner"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.get_provider_by_owner_id(owner_id)
+
+                rows = [
+                    ("Provider Hash", str(getattr(result, "provider_hash", "-"))),
+                    ("Owner Hash", str(getattr(result, "owner_hash", "-"))),
+                    ("Provider Name", str(getattr(result, "provider_name", "-"))),
+                    ("Provider URL", str(getattr(result, "provider_url", "-"))),
+                    ("Active", str(getattr(result, "is_active", "-"))),
+                ]
+
+                if hasattr(result, "api_token"):
+                    rows.append(("API Token", str(result.api_token)))
+
+                console.print(key_value_table("🏢 Provider Info", rows))
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("get-user-providers")
+    def get_user_providers(
+        user_id: int = typer.Argument(..., help="External user ID"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.get_user_providers(user_id)
+
+                connections = result.connections
+
+                if not connections:
+                    console.print("[yellow]No provider connections found[/yellow]")
+                    return
+
+                title = f"🔗 Provider Connections for User {user_id} ({len(connections)})"
+
+                table = Table(title=title, box=box.ROUNDED)
+                table.add_column("Provider", style="cyan")
+                table.add_column("URL", style="white")
+                table.add_column("Authorized", justify="center", style="green")
+                table.add_column("Status", style="yellow")
+
+                for conn in connections:
+                    status = getattr(conn, "status", None)
+                    status_str = getattr(status, "value", status)
+                    is_authorized = getattr(conn, "is_authorized", False)
+
+                    table.add_row(
+                        str(getattr(conn, "provider_name", "-")),
+                        str(getattr(conn, "provider_url", "-") or "-"),
+                        "✓" if is_authorized else "✗",
+                        f"[{status_style(status)}]{status_str or '-'}[/{status_style(status)}]",
+                    )
+
+                console.print(table)
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("get-user-provider")
+    def get_user_provider(
+        user_id: int = typer.Argument(..., help="External user ID"),
+        provider_name: str = typer.Argument(..., help="Provider name"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.get_user_provider(user_id, provider_name)
+
+                status = getattr(result, "status", None)
+                status_str = getattr(status, "value", status)
+
+                rows = [
+                    ("User ID", str(user_id)),
+                    ("Provider Name", str(getattr(result, "provider_name", provider_name))),
+                    ("Provider URL", str(getattr(result, "provider_url", "-") or "-")),
+                    ("Authorized", str(getattr(result, "is_authorized", "-"))),
+                    ("Status", str(status_str or "-")),
+                ]
+
+                console.print(key_value_table("🔗 Provider Connection", rows))
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    # ─────────────────────── Provider authorization (v2hub-admin >= 1.1.4) ─────────────────
+
+    @admin_app.command("get-provider-authorization")
+    def get_provider_authorization(
+        provider_name: str = typer.Argument(..., help="Provider name"),
+        user_id: int = typer.Argument(..., help="Target user ID"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.get_provider_authorization(
+                    provider_name=provider_name,
+                    user_id=user_id,
+                )
+
+                status = getattr(result, "status", None)
+                status_str = getattr(status, "value", status)
+
+                console.print(
+                    Panel(
+                        f"User ID: [cyan]{user_id}[/cyan]\n"
+                        f"Provider: [cyan]{getattr(result, 'provider_name', provider_name)}[/cyan]\n"
+                        f"Provider URL: {getattr(result, 'provider_url', '-') or '-'}\n"
+                        f"Status: [{status_style(status)}]{status_str or '-'}[/{status_style(status)}]",
+                        title="🔐 Provider Authorization",
+                        border_style=status_style(status),
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("process-provider-authorization")
+    def process_provider_authorization(
+        user_id: int = typer.Argument(..., help="Target user ID"),
+        provider_name: str = typer.Argument(..., help="Provider name"),
+        hmac: str | None = typer.Option(
+            None,
+            "--hmac",
+            help="Authorization HMAC from an issued connection invite (omit to query only)",
+        ),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.process_provider_authorization(
+                    user_id=user_id,
+                    provider_name=provider_name,
+                    hmac=hmac,
+                )
+
+                status = getattr(result, "status", None)
+                status_str = getattr(status, "value", status)
+
+                console.print(
+                    Panel(
+                        f"User ID: [cyan]{user_id}[/cyan]\n"
+                        f"Provider: [cyan]{getattr(result, 'provider_name', provider_name)}[/cyan]\n"
+                        f"Status: [{status_style(status)}]{status_str or '-'}[/{status_style(status)}]",
+                        title="🔐 Provider Authorization Processed",
+                        border_style=status_style(status),
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("approve-provider-authorization")
+    def approve_provider_authorization(
+        user_id: int = typer.Argument(..., help="Target user ID"),
+        provider_name: str = typer.Argument(..., help="Provider name"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.approve_provider_authorization(
+                    user_id=user_id,
+                    provider_name=provider_name,
+                )
+
+                status = getattr(result, "status", None)
+                status_str = getattr(status, "value", status)
+
+                console.print(
+                    Panel(
+                        f"User ID: [cyan]{user_id}[/cyan]\n"
+                        f"Provider: [cyan]{getattr(result, 'provider_name', provider_name)}[/cyan]\n"
+                        f"Status: [{status_style(status)}]{status_str or '-'}[/{status_style(status)}]",
+                        title="✅ Provider Authorization Approved",
+                        border_style=status_style(status),
+                    )
+                )
+
+        except ValueError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1) from None
+        except Exception as e:
+            show_error(e)
+
+    @admin_app.command("reject-provider-authorization")
+    def reject_provider_authorization(
+        user_id: int = typer.Argument(..., help="Target user ID"),
+        provider_name: str = typer.Argument(..., help="Provider name"),
+        force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+        base_url: str | None = typer.Option(
+            None,
+            "--base-url",
+            "-u",
+            help="API base URL",
+        ),
+        secret_key: str | None = typer.Option(
+            None,
+            "--secret-key",
+            "-k",
+            help="Admin secret key",
+        ),
+    ) -> None:
+        try:
+            if not force:
+                confirm = typer.confirm(
+                    f"Reject/revoke authorization for user {user_id} <-> provider "
+                    f"'{provider_name}'?"
+                )
+                if not confirm:
+                    console.print("[yellow]Cancelled[/yellow]")
+                    return
+
+            with get_admin_client(base_url, secret_key) as client:
+                result = client.reject_provider_authorization(
+                    user_id=user_id,
+                    provider_name=provider_name,
+                )
+
+                status = getattr(result, "status", None)
+                status_str = getattr(status, "value", status)
+                # status is None when the server deleted the record outright
+                # (no subscriptions existed for it); REVOKED when it kept it
+                # because subscriptions still exist.
+                outcome = "Deleted" if status is None else str(status_str)
+
+                console.print(
+                    Panel(
+                        f"User ID: [cyan]{user_id}[/cyan]\n"
+                        f"Provider: [cyan]{getattr(result, 'provider_name', provider_name)}[/cyan]\n"
+                        f"Outcome: [{status_style(status)}]{outcome}[/{status_style(status)}]",
+                        title="🚫 Provider Authorization Rejected",
+                        border_style=status_style(status),
                     )
                 )
 

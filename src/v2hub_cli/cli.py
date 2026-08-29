@@ -777,6 +777,198 @@ def refresh(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Account & Public Access
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+@app.command()
+def me(
+    base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
+    api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
+) -> None:
+    """Show information about the currently authenticated user."""
+    try:
+        with ClientManager.get_client(base_url, api_token) as client:
+            result = client.get_me()
+            formatter.show_me(result)
+
+    except ValueError as e:
+        formatter.show_missing_config(str(e))
+        raise typer.Exit(1) from None
+    except Exception as e:
+        formatter.show_error(e)
+        raise typer.Exit(1) from None
+
+
+@app.command()
+def public(
+    token: str = typer.Argument(
+        ..., help="Subscription token", shell_complete=complete_subscription_token
+    ),
+    decode: bool = typer.Option(
+        False, "--decode", "-d", help="Decode and print the configs instead of base64"
+    ),
+    base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
+    api_token: str | None = typer.Option(
+        None,
+        "--api-token",
+        "-t",
+        help="API token (the public-configs endpoint itself doesn't require one to belong "
+        "to this subscription, but the client still needs a valid token to authenticate)",
+    ),
+) -> None:
+    """Fetch a subscription's public configs."""
+    try:
+        with ClientManager.get_client(base_url, api_token) as client:
+            result = client.get_public_subscription(token)
+            formatter.show_public_subscription(result, decode=decode)
+
+    except ValueError as e:
+        formatter.show_missing_config(str(e))
+        raise typer.Exit(1) from None
+    except Exception as e:
+        formatter.show_error(e)
+        raise typer.Exit(1) from None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Provider Connections (self-service side)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# These operate on the *current* authenticated user's own connections to
+# providers -- the mirror image of `provider {user_id} connection-*`
+# below, which operates from a provider's point of view about one of
+# their users. Nothing here talks HTTP directly; every command calls the
+# matching method on `v2hub.client.VPNClient`.
+
+connection_app = typer.Typer(
+    name="connection",
+    help="Manage the current user's connections to providers.",
+)
+app.add_typer(connection_app, name="connection")
+
+
+@connection_app.command(name="list")
+def connection_list(
+    base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
+    api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
+) -> None:
+    """List the current user's provider connections (pending and approved)."""
+    try:
+        with ClientManager.get_client(base_url, api_token) as client:
+            result = client.list_connections()
+            formatter.show_connections_table(result.connections)
+
+    except ValueError as e:
+        formatter.show_missing_config(str(e))
+        raise typer.Exit(1) from None
+    except Exception as e:
+        formatter.show_error(e)
+        raise typer.Exit(1) from None
+
+
+@connection_app.command(name="get")
+def connection_get(
+    provider_name: str = typer.Argument(..., help="Public provider name"),
+    base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
+    api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
+) -> None:
+    """Get the current user's connection status for a provider."""
+    try:
+        with ClientManager.get_client(base_url, api_token) as client:
+            result = client.get_connection(provider_name)
+            formatter.show_connection(result)
+
+    except ValueError as e:
+        formatter.show_missing_config(str(e))
+        raise typer.Exit(1) from None
+    except Exception as e:
+        formatter.show_error(e)
+        raise typer.Exit(1) from None
+
+
+@connection_app.command(name="approve")
+def connection_approve(
+    provider_name: str = typer.Argument(..., help="Public provider name"),
+    base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
+    api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
+) -> None:
+    """Approve a pending provider connection request."""
+    try:
+        with ClientManager.get_client(base_url, api_token) as client:
+            result = client.approve_connection(provider_name)
+            formatter.show_connection(result, title="✅ Connection Approved")
+
+    except ValueError as e:
+        formatter.show_missing_config(str(e))
+        raise typer.Exit(1) from None
+    except Exception as e:
+        formatter.show_error(e)
+        raise typer.Exit(1) from None
+
+
+@connection_app.command(name="reject")
+def connection_reject(
+    provider_name: str = typer.Argument(..., help="Public provider name"),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+    base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
+    api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
+) -> None:
+    """Reject a pending provider connection request."""
+    try:
+        if not force:
+            confirm = typer.confirm(f"Reject pending connection to provider '{provider_name}'?")
+            if not confirm:
+                console.print("[yellow]Cancelled[/yellow]")
+                return
+
+        with ClientManager.get_client(base_url, api_token) as client:
+            result = client.reject_connection(provider_name)
+            formatter.show_connection(result, title="🚫 Connection Rejected")
+
+    except ValueError as e:
+        formatter.show_missing_config(str(e))
+        raise typer.Exit(1) from None
+    except Exception as e:
+        formatter.show_error(e)
+        raise typer.Exit(1) from None
+
+
+@connection_app.command(name="revoke")
+def connection_revoke(
+    provider_name: str = typer.Argument(..., help="Public provider name"),
+    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation"),
+    base_url: str | None = typer.Option(None, "--base-url", "-u", help="API base URL"),
+    api_token: str | None = typer.Option(None, "--api-token", "-t", help="API token"),
+) -> None:
+    """Revoke the current user's authorization for a provider.
+
+    Existing subscriptions from that provider remain available; the
+    authorization record is preserved as REVOKED rather than deleted.
+    """
+    try:
+        if not force:
+            confirm = typer.confirm(f"Revoke connection to provider '{provider_name}'?")
+            if not confirm:
+                console.print("[yellow]Cancelled[/yellow]")
+                return
+
+        with ClientManager.get_client(base_url, api_token) as client:
+            client.revoke_connection(provider_name)
+            formatter.show_success(
+                f"Revoked connection to provider [cyan]{provider_name}[/cyan]",
+                title="🚫 Connection Revoked",
+            )
+
+    except ValueError as e:
+        formatter.show_missing_config(str(e))
+        raise typer.Exit(1) from None
+    except Exception as e:
+        formatter.show_error(e)
+        raise typer.Exit(1) from None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Provider Commands
 # ═══════════════════════════════════════════════════════════════════════════
 #
