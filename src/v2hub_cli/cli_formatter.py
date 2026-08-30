@@ -20,7 +20,7 @@ except ImportError as exc:
     ) from exc
 
 from v2hub.core.exceptions import VPNAPIError
-from v2hub.models import PublicSubscriptionResponse, SourceType
+from v2hub.models import SourceType
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -209,6 +209,132 @@ class OutputFormatter:
             )
         )
 
+    def show_me(self, me: Any) -> None:
+        """
+        Display the currently authenticated user's own account info.
+
+        Args:
+            me: A MeResponse-like object with `user_id` and `is_active`.
+        """
+        is_active = getattr(me, "is_active", None)
+        style = "green" if is_active else "red"
+
+        self.console.print(
+            Panel(
+                f"User ID: [cyan]{self._safe_str(getattr(me, 'user_id', None))}[/cyan]\n"
+                f"Active: [{style}]{self._safe_str(is_active)}[/{style}]",
+                title="👤 Me",
+                border_style="cyan",
+            )
+        )
+
+    def show_connection(self, connection: Any, *, title: str = "🔗 Connection") -> None:
+        """
+        Display a single connection between the current user and a provider.
+
+        Args:
+            connection: A ConnectionResponse-like object with
+                `provider_name`, `provider_url`, `is_authorized`, `status`.
+            title: Panel title.
+        """
+        status = getattr(connection, "status", None)
+        status_str = getattr(status, "value", status)
+
+        style = {
+            "approved": "green",
+            "revoked": "red",
+            "pending": "yellow",
+        }.get(str(status_str), "white")
+
+        is_authorized = getattr(connection, "is_authorized", False)
+        authorized_style = "green" if is_authorized else "red"
+
+        provider_url = getattr(connection, "provider_url", None)
+        url_line = f"URL: {provider_url}\n" if provider_url else ""
+
+        self.console.print(
+            Panel(
+                f"Provider: [cyan]{self._safe_str(getattr(connection, 'provider_name', None))}[/cyan]\n"
+                f"{url_line}"
+                f"Authorized: [{authorized_style}]{self._safe_str(is_authorized)}[/{authorized_style}]\n"
+                f"Status: [{style}]{self._safe_str(status_str)}[/{style}]",
+                title=title,
+                border_style=style,
+            )
+        )
+
+    def show_connections_table(
+        self,
+        connections: Sequence[Any],
+        *,
+        title: str = "🔗 Connections",
+    ) -> None:
+        """
+        Display the current user's provider connections as a table.
+
+        Args:
+            connections: Sequence of ConnectionResponse-like objects.
+            title: Table title.
+        """
+        if not connections:
+            self.console.print("[yellow]No provider connections found[/yellow]")
+            return
+
+        table = Table(title=f"{title} ({len(connections)})", box=box.ROUNDED)
+        table.add_column("Provider", style="cyan")
+        table.add_column("URL", style="white")
+        table.add_column("Authorized", justify="center", style="green")
+        table.add_column("Status", style="yellow")
+
+        for conn in connections:
+            status = getattr(conn, "status", None)
+            status_str = getattr(status, "value", status)
+            is_authorized = getattr(conn, "is_authorized", False)
+
+            table.add_row(
+                self._safe_str(getattr(conn, "provider_name", None)),
+                self._safe_str(getattr(conn, "provider_url", None)),
+                "✓" if is_authorized else "✗",
+                self._safe_str(status_str),
+            )
+
+        self.console.print(table)
+
+    def show_public_subscription(self, subscription: Any, *, decode: bool = False) -> None:
+        """
+        Display a public subscription's configs.
+
+        Args:
+            subscription: A PublicSubscriptionResponse-like object with a
+                `content` (base64) field and, when the real model is
+                passed, `decode()`/`get_configs()`/`config_count` helpers.
+            decode: If True and the object supports it, print the decoded
+                configs (one per line) instead of the raw base64 content.
+        """
+        title = self._safe_str(getattr(subscription, "title", None), default="v2hub")
+
+        if decode and hasattr(subscription, "get_configs"):
+            configs = subscription.get_configs()
+            body = "\n".join(configs) if configs else "[yellow](no configs)[/yellow]"
+            count = len(configs)
+            self.console.print(
+                Panel(
+                    body,
+                    title=f"📡 {title} ({count} config{'s' if count != 1 else ''})",
+                    border_style="cyan",
+                )
+            )
+            return
+
+        content = self._safe_str(getattr(subscription, "content", None))
+        self.console.print(
+            Panel(
+                content,
+                title=f"📦 {title} (base64)",
+                border_style="cyan",
+            )
+        )
+
     def show_subscription_detail(self, subscription: Subscription) -> None:
         """
         Display detailed subscription information.
@@ -269,145 +395,3 @@ class OutputFormatter:
             )
 
         self.console.print(table)
-
-    def show_me(self, user: Any) -> None:
-        """
-        Display information about the currently authenticated user.
-
-        Args:
-            user: User response containing account information.
-        """
-        self.console.print(
-            Panel(
-                f"[bold]User ID:[/bold] "
-                f"[cyan]{self._safe_str(getattr(user, 'user_id', None))}[/cyan]\n"
-                f"[bold]Active:[/bold] "
-                f"{self._safe_str(getattr(user, 'is_active', None))}",
-                title="👤 Current User",
-                border_style="cyan",
-            )
-        )
-
-    def show_connections_table(
-        self,
-        connections: Sequence[Any],
-        *,
-        title: str = "🔗 Provider Connections",
-    ) -> None:
-        """
-        Display provider connections in a table.
-
-        Args:
-            connections: Provider connection responses.
-            title: Table title.
-        """
-        if not connections:
-            self.console.print("[yellow]No provider connections found[/yellow]")
-            return
-
-        table = Table(title=title, box=box.ROUNDED)
-        table.add_column("Provider", style="cyan")
-        table.add_column("URL", style="white")
-        table.add_column("Authorized", justify="center")
-        table.add_column("Status", style="yellow")
-
-        for connection in connections:
-            status = getattr(connection, "status", None)
-            status_value = getattr(status, "value", status)
-
-            if status_value == "approved":
-                status_style = "green"
-            elif status_value == "revoked":
-                status_style = "red"
-            else:
-                status_style = "yellow"
-
-            table.add_row(
-                self._safe_str(getattr(connection, "provider_name", None)),
-                self._safe_str(getattr(connection, "provider_url", None)),
-                "✓" if getattr(connection, "is_authorized", False) else "✗",
-                f"[{status_style}]{self._safe_str(status_value)}[/{status_style}]",
-            )
-
-        self.console.print(table)
-
-    def show_connection(
-        self,
-        connection: Any,
-        *,
-        title: str = "🔗 Provider Connection",
-    ) -> None:
-        """
-        Display detailed information about a provider connection.
-
-        Args:
-            connection: Provider connection response.
-            title: Panel title.
-        """
-        status = getattr(connection, "status", None)
-        status_value = getattr(status, "value", status)
-
-        if status_value == "approved":
-            status_style = "green"
-        elif status_value == "revoked":
-            status_style = "red"
-        elif status_value == "pending":
-            status_style = "yellow"
-        else:
-            status_style = "white"
-
-        self.console.print(
-            Panel(
-                f"[bold]Provider:[/bold] "
-                f"[cyan]{self._safe_str(getattr(connection, 'provider_name', None))}[/cyan]\n"
-                f"[bold]URL:[/bold] "
-                f"{self._safe_str(getattr(connection, 'provider_url', None))}\n"
-                f"[bold]Authorized:[/bold] "
-                f"{'Yes' if getattr(connection, 'is_authorized', False) else 'No'}\n"
-                f"[bold]Status:[/bold] "
-                f"[{status_style}]{self._safe_str(status_value)}[/{status_style}]",
-                title=title,
-                border_style=status_style,
-            )
-        )
-
-    def show_public_subscription(
-        self,
-        subscription: PublicSubscriptionResponse,
-        *,
-        decode: bool = False,
-    ) -> None:
-        """
-        Display a public subscription.
-
-        Args:
-            subscription: Public subscription response.
-            decode: Decode and display configs instead of the base64 content.
-        """
-        if decode:
-            configs = subscription.get_configs()
-
-            if not configs:
-                self.console.print("[yellow]No configs found[/yellow]")
-                return
-
-            table = Table(
-                title=f"📦 Public Subscription ({subscription.config_count} configs)",
-                box=box.ROUNDED,
-            )
-            table.add_column("#", justify="right", style="yellow")
-            table.add_column("Config", style="white")
-
-            for index, config in enumerate(configs, start=1):
-                table.add_row(str(index), config)
-
-            self.console.print(table)
-            return
-
-        self.console.print(
-            Panel(
-                subscription.content,
-                title=f"📦 Public Subscription: {subscription.title or 'v2hub'}",
-                border_style="cyan",
-            )
-        )

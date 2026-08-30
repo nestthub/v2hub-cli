@@ -14,6 +14,7 @@ import pytest
 import typer
 from typer.testing import CliRunner
 
+from v2hub.core.exceptions import VPNAPIError
 from v2hub_admin import AdminClient
 from v2hub_cli import _admin_cli
 
@@ -150,6 +151,426 @@ class TestDeleteUserCommand:
         assert "Deleted" in result.stdout
 
         client.delete_user.assert_called_once_with(42)
+
+
+class TestGetProviderByNameCommand:
+    def test_gets_provider(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_provider_by_name.return_value = types.SimpleNamespace(
+            provider_hash="hash-1",
+            owner_hash="owner-1",
+            provider_name="vpn123",
+            provider_url="https://vpn123.example.com",
+            is_active=True,
+            api_token="provider-token",
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-provider-by-name", "vpn123"])
+
+        assert result.exit_code == 0
+        assert "vpn123" in result.stdout
+        assert "provider-token" in result.stdout
+        client.get_provider_by_name.assert_called_once_with("vpn123")
+
+    def test_error_shown_on_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_provider_by_name.side_effect = VPNAPIError("not found")
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-provider-by-name", "ghost"])
+
+        assert result.exit_code == 1
+
+
+class TestGetProviderByOwnerIdCommand:
+    def test_gets_provider(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_provider_by_owner_id.return_value = types.SimpleNamespace(
+            provider_hash="hash-1",
+            owner_hash="owner-1",
+            provider_name="vpn123",
+            provider_url="https://vpn123.example.com",
+            is_active=True,
+            api_token="provider-token",
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-provider-by-owner-id", "42"])
+
+        assert result.exit_code == 0
+        assert "vpn123" in result.stdout
+        client.get_provider_by_owner_id.assert_called_once_with(42)
+
+    def test_error_shown_on_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_provider_by_owner_id.side_effect = VPNAPIError("not found")
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-provider-by-owner-id", "42"])
+
+        assert result.exit_code == 1
+
+
+class TestGetUserProvidersCommand:
+    def test_lists_connections(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_user_providers.return_value = types.SimpleNamespace(
+            connections=[
+                types.SimpleNamespace(
+                    provider_name="vpn123",
+                    provider_url="https://vpn123.example.com",
+                    is_authorized=True,
+                    status="approved",
+                ),
+                types.SimpleNamespace(
+                    provider_name="vpn456",
+                    provider_url=None,
+                    is_authorized=False,
+                    status="pending",
+                ),
+            ]
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-user-providers", "42"])
+
+        assert result.exit_code == 0
+        assert "vpn123" in result.stdout
+        assert "vpn456" in result.stdout
+        client.get_user_providers.assert_called_once_with(42)
+
+    def test_no_connections_shows_message(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_user_providers.return_value = types.SimpleNamespace(connections=[])
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-user-providers", "42"])
+
+        assert result.exit_code == 0
+        assert "No provider connections found" in result.stdout
+
+    def test_error_shown_on_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_user_providers.side_effect = VPNAPIError("not found")
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-user-providers", "42"])
+
+        assert result.exit_code == 1
+
+
+class TestGetUserProviderCommand:
+    def test_gets_single_connection(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_user_provider.return_value = types.SimpleNamespace(
+            provider_name="vpn123",
+            provider_url="https://vpn123.example.com",
+            is_authorized=True,
+            status="approved",
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-user-provider", "42", "vpn123"])
+
+        assert result.exit_code == 0
+        assert "vpn123" in result.stdout
+        assert "approved" in result.stdout
+        client.get_user_provider.assert_called_once_with(42, "vpn123")
+
+    def test_error_shown_on_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_user_provider.side_effect = VPNAPIError("not found")
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-user-provider", "42", "vpn123"])
+
+        assert result.exit_code == 1
+
+
+class TestGetProviderAuthorizationCommand:
+    def test_gets_authorization(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_provider_authorization.return_value = types.SimpleNamespace(
+            user_id=42,
+            provider_name="vpn123",
+            provider_url="https://vpn123.example.com",
+            status="pending",
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-provider-authorization", "vpn123", "42"])
+
+        assert result.exit_code == 0
+        assert "pending" in result.stdout
+        client.get_provider_authorization.assert_called_once_with(
+            provider_name="vpn123", user_id=42
+        )
+
+    def test_error_shown_on_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.get_provider_authorization.side_effect = VPNAPIError("not found")
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["get-provider-authorization", "vpn123", "42"])
+
+        assert result.exit_code == 1
+
+
+class TestProcessProviderAuthorizationCommand:
+    def test_processes_without_hmac(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.process_provider_authorization.return_value = types.SimpleNamespace(
+            user_id=42,
+            provider_name="vpn123",
+            status="pending",
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["process-provider-authorization", "42", "vpn123"])
+
+        assert result.exit_code == 0
+        assert "pending" in result.stdout
+        client.process_provider_authorization.assert_called_once_with(
+            user_id=42, provider_name="vpn123", hmac=None
+        )
+
+    def test_processes_with_hmac(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.process_provider_authorization.return_value = types.SimpleNamespace(
+            user_id=42,
+            provider_name="vpn123",
+            status="pending",
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(
+            admin_app,
+            ["process-provider-authorization", "42", "vpn123", "--hmac", "abc123"],
+        )
+
+        assert result.exit_code == 0
+        client.process_provider_authorization.assert_called_once_with(
+            user_id=42, provider_name="vpn123", hmac="abc123"
+        )
+
+    def test_error_shown_on_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.process_provider_authorization.side_effect = VPNAPIError("invalid hmac")
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["process-provider-authorization", "42", "vpn123"])
+
+        assert result.exit_code == 1
+
+
+class TestApproveProviderAuthorizationCommand:
+    def test_approves(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.approve_provider_authorization.return_value = types.SimpleNamespace(
+            user_id=42,
+            provider_name="vpn123",
+            status="approved",
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["approve-provider-authorization", "42", "vpn123"])
+
+        assert result.exit_code == 0
+        assert "approved" in result.stdout
+        client.approve_provider_authorization.assert_called_once_with(
+            user_id=42, provider_name="vpn123"
+        )
+
+    def test_error_shown_on_conflict(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.approve_provider_authorization.side_effect = VPNAPIError("not pending")
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(admin_app, ["approve-provider-authorization", "42", "vpn123"])
+
+        assert result.exit_code == 1
+
+
+class TestRejectProviderAuthorizationCommand:
+    def test_rejects_with_force(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.reject_provider_authorization.return_value = types.SimpleNamespace(
+            user_id=42,
+            provider_name="vpn123",
+            status=None,
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(
+            admin_app, ["reject-provider-authorization", "42", "vpn123", "--force"]
+        )
+
+        assert result.exit_code == 0
+        assert "Deleted" in result.stdout
+        client.reject_provider_authorization.assert_called_once_with(
+            user_id=42, provider_name="vpn123"
+        )
+
+    def test_shows_revoked_outcome_when_subscriptions_exist(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.reject_provider_authorization.return_value = types.SimpleNamespace(
+            user_id=42,
+            provider_name="vpn123",
+            status="revoked",
+        )
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(
+            admin_app, ["reject-provider-authorization", "42", "vpn123", "--force"]
+        )
+
+        assert result.exit_code == 0
+        assert "revoked" in result.stdout
+
+    def test_prompts_for_confirmation_without_force(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(
+            admin_app, ["reject-provider-authorization", "42", "vpn123"], input="n\n"
+        )
+
+        assert result.exit_code == 0
+        assert "Cancelled" in result.stdout
+        client.reject_provider_authorization.assert_not_called()
+
+    def test_confirmed_prompt_rejects(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.reject_provider_authorization.return_value = types.SimpleNamespace(
+            user_id=42,
+            provider_name="vpn123",
+            status=None,
+        )
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(
+            admin_app, ["reject-provider-authorization", "42", "vpn123"], input="y\n"
+        )
+
+        assert result.exit_code == 0
+        client.reject_provider_authorization.assert_called_once_with(
+            user_id=42, provider_name="vpn123"
+        )
+
+    def test_error_shown_on_failure(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        admin_app: typer.Typer,
+    ) -> None:
+        client = MagicMock(spec=AdminClient)
+        client.reject_provider_authorization.side_effect = VPNAPIError("not pending")
+
+        _patch_admin_client(monkeypatch, client)
+
+        result = runner.invoke(
+            admin_app, ["reject-provider-authorization", "42", "vpn123", "--force"]
+        )
+
+        assert result.exit_code == 1
 
 
 class TestBanIpCommand:

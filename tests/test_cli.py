@@ -408,6 +408,304 @@ class TestRefreshCommand:
         assert "dns error" in result.stdout
 
 
+class TestMeCommand:
+    def test_shows_own_account(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.get_me.return_value = MagicMock(user_id=42, is_active=True)
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["me"])
+        assert result.exit_code == 0
+        assert "42" in result.stdout
+        assert "True" in result.stdout
+        client.get_me.assert_called_once_with()
+
+    def test_missing_config_exits_nonzero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _patch_get_client_raises(monkeypatch, ValueError("API token not provided"))
+
+        result = runner.invoke(cli.app, ["me"])
+        assert result.exit_code == 1
+
+    def test_error_shown_on_failure(
+        self, monkeypatch: pytest.MonkeyPatch, fake_vpn_api_error: type[Exception]
+    ) -> None:
+        client = MagicMock()
+        client.get_me.side_effect = fake_vpn_api_error("unauthorized")
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["me"])
+        assert result.exit_code == 1
+
+
+class TestPublicCommand:
+    def test_shows_base64_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.get_public_subscription.return_value = MagicMock(
+            title="v2hub", content="dmxlc3M6Ly9leGFtcGxl"
+        )
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["public", "tok_123"])
+        assert result.exit_code == 0
+        assert "dmxlc3M6Ly9leGFtcGxl" in result.stdout
+        client.get_public_subscription.assert_called_once_with("tok_123")
+
+    def test_decode_flag_shows_configs(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        sub = MagicMock(title="v2hub")
+        sub.get_configs.return_value = ["vless://a", "vless://b"]
+        client.get_public_subscription.return_value = sub
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["public", "tok_123", "--decode"])
+        assert result.exit_code == 0
+        assert "vless://a" in result.stdout
+        assert "vless://b" in result.stdout
+
+    def test_decode_flag_no_configs_shows_placeholder(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        client = MagicMock()
+        sub = MagicMock(title="v2hub")
+        sub.get_configs.return_value = []
+        client.get_public_subscription.return_value = sub
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["public", "tok_123", "-d"])
+        assert result.exit_code == 0
+        assert "no configs" in result.stdout.lower()
+
+    def test_missing_config_exits_nonzero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _patch_get_client_raises(monkeypatch, ValueError("API URL not provided"))
+
+        result = runner.invoke(cli.app, ["public", "tok_123"])
+        assert result.exit_code == 1
+
+    def test_error_shown_on_failure(
+        self, monkeypatch: pytest.MonkeyPatch, fake_vpn_api_error: type[Exception]
+    ) -> None:
+        client = MagicMock()
+        client.get_public_subscription.side_effect = fake_vpn_api_error("not found")
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["public", "tok_123"])
+        assert result.exit_code == 1
+
+
+class TestConnectionListCommand:
+    def test_lists_connections(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.list_connections.return_value = MagicMock(
+            connections=[
+                MagicMock(
+                    provider_name="vpn123",
+                    provider_url="https://vpn123.example.com",
+                    is_authorized=True,
+                    status="approved",
+                ),
+            ]
+        )
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "list"])
+        assert result.exit_code == 0
+        assert "vpn123" in result.stdout
+        client.list_connections.assert_called_once_with()
+
+    def test_no_connections_shows_message(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.list_connections.return_value = MagicMock(connections=[])
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "list"])
+        assert result.exit_code == 0
+        assert "No provider connections found" in result.stdout
+
+    def test_missing_config_exits_nonzero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _patch_get_client_raises(monkeypatch, ValueError("API token not provided"))
+
+        result = runner.invoke(cli.app, ["connection", "list"])
+        assert result.exit_code == 1
+
+    def test_error_shown_on_failure(
+        self, monkeypatch: pytest.MonkeyPatch, fake_vpn_api_error: type[Exception]
+    ) -> None:
+        client = MagicMock()
+        client.list_connections.side_effect = fake_vpn_api_error("boom")
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "list"])
+        assert result.exit_code == 1
+
+
+class TestConnectionGetCommand:
+    def test_shows_connection(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.get_connection.return_value = MagicMock(
+            provider_name="vpn123",
+            provider_url="https://vpn123.example.com",
+            is_authorized=False,
+            status="pending",
+        )
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "get", "vpn123"])
+        assert result.exit_code == 0
+        assert "vpn123" in result.stdout
+        assert "pending" in result.stdout.lower()
+        client.get_connection.assert_called_once_with("vpn123")
+
+    def test_missing_config_exits_nonzero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _patch_get_client_raises(monkeypatch, ValueError("API token not provided"))
+
+        result = runner.invoke(cli.app, ["connection", "get", "vpn123"])
+        assert result.exit_code == 1
+
+    def test_error_shown_on_failure(
+        self, monkeypatch: pytest.MonkeyPatch, fake_vpn_api_error: type[Exception]
+    ) -> None:
+        client = MagicMock()
+        client.get_connection.side_effect = fake_vpn_api_error("not found")
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "get", "vpn123"])
+        assert result.exit_code == 1
+
+
+class TestConnectionApproveCommand:
+    def test_approves(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.approve_connection.return_value = MagicMock(
+            provider_name="vpn123",
+            provider_url=None,
+            is_authorized=True,
+            status="approved",
+        )
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "approve", "vpn123"])
+        assert result.exit_code == 0
+        assert "approved" in result.stdout.lower()
+        client.approve_connection.assert_called_once_with("vpn123")
+
+    def test_missing_config_exits_nonzero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _patch_get_client_raises(monkeypatch, ValueError("API token not provided"))
+
+        result = runner.invoke(cli.app, ["connection", "approve", "vpn123"])
+        assert result.exit_code == 1
+
+    def test_error_shown_on_conflict(
+        self, monkeypatch: pytest.MonkeyPatch, fake_vpn_api_error: type[Exception]
+    ) -> None:
+        client = MagicMock()
+        client.approve_connection.side_effect = fake_vpn_api_error("not pending")
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "approve", "vpn123"])
+        assert result.exit_code == 1
+
+
+class TestConnectionRejectCommand:
+    def test_rejects_with_force(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.reject_connection.return_value = MagicMock(
+            provider_name="vpn123",
+            provider_url=None,
+            is_authorized=False,
+            status="revoked",
+        )
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "reject", "vpn123", "--force"])
+        assert result.exit_code == 0
+        client.reject_connection.assert_called_once_with("vpn123")
+
+    def test_missing_config_exits_nonzero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _patch_get_client_raises(monkeypatch, ValueError("API token not provided"))
+
+        result = runner.invoke(cli.app, ["connection", "reject", "vpn123", "--force"])
+        assert result.exit_code == 1
+
+    def test_prompts_for_confirmation_without_force(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "reject", "vpn123"], input="n\n")
+        assert result.exit_code == 0
+        assert "Cancelled" in result.stdout
+        client.reject_connection.assert_not_called()
+
+    def test_confirmed_prompt_rejects(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.reject_connection.return_value = MagicMock(
+            provider_name="vpn123",
+            provider_url=None,
+            is_authorized=False,
+            status="revoked",
+        )
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "reject", "vpn123"], input="y\n")
+        assert result.exit_code == 0
+        client.reject_connection.assert_called_once_with("vpn123")
+
+    def test_error_shown_on_failure(
+        self, monkeypatch: pytest.MonkeyPatch, fake_vpn_api_error: type[Exception]
+    ) -> None:
+        client = MagicMock()
+        client.reject_connection.side_effect = fake_vpn_api_error("not pending")
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "reject", "vpn123", "--force"])
+        assert result.exit_code == 1
+
+
+class TestConnectionRevokeCommand:
+    def test_revokes_with_force(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.revoke_connection.return_value = None
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "revoke", "vpn123", "--force"])
+        assert result.exit_code == 0
+        assert "vpn123" in result.stdout
+        client.revoke_connection.assert_called_once_with("vpn123")
+
+    def test_missing_config_exits_nonzero(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _patch_get_client_raises(monkeypatch, ValueError("API token not provided"))
+
+        result = runner.invoke(cli.app, ["connection", "revoke", "vpn123", "--force"])
+        assert result.exit_code == 1
+
+    def test_prompts_for_confirmation_without_force(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "revoke", "vpn123"], input="n\n")
+        assert result.exit_code == 0
+        assert "Cancelled" in result.stdout
+        client.revoke_connection.assert_not_called()
+
+    def test_confirmed_prompt_revokes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        client = MagicMock()
+        client.revoke_connection.return_value = None
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "revoke", "vpn123"], input="y\n")
+        assert result.exit_code == 0
+        client.revoke_connection.assert_called_once_with("vpn123")
+
+    def test_error_shown_on_failure(
+        self, monkeypatch: pytest.MonkeyPatch, fake_vpn_api_error: type[Exception]
+    ) -> None:
+        client = MagicMock()
+        client.revoke_connection.side_effect = fake_vpn_api_error("not found")
+        _patch_get_client(monkeypatch, client)
+
+        result = runner.invoke(cli.app, ["connection", "revoke", "vpn123", "--force"])
+        assert result.exit_code == 1
+
+
 class TestErrorHandlingAcrossCommands:
     @pytest.mark.parametrize(
         "args",

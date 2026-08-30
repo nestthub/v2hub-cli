@@ -104,6 +104,24 @@ v2hub refresh <token>
 
 # Delete subscription
 v2hub delete <token>
+
+# Show your own account info
+v2hub me
+
+# Fetch a subscription's public configs
+v2hub public <token> [--decode]
+```
+
+### Connection Commands
+
+Manage the current user's own connections to providers:
+
+```bash
+v2hub connection list
+v2hub connection get <provider_name>
+v2hub connection approve <provider_name>
+v2hub connection reject <provider_name> [--force]
+v2hub connection revoke <provider_name> [--force]
 ```
 
 ### Admin Commands
@@ -128,11 +146,23 @@ v2hub admin refresh-token <user_id>
 v2hub admin create-provider <owner_hash> <provider_name> [--provider-url <url>]
 v2hub admin get-providers
 v2hub admin get-provider <provider_hash>
+v2hub admin get-provider-by-name <provider_name>
+v2hub admin get-provider-by-owner-id <owner_id>
 v2hub admin delete-provider <provider_hash>
 v2hub admin set-provider-status <provider_hash> --active|--inactive
 v2hub admin update-provider-url <provider_hash> --provider-url <url>
 v2hub admin update-provider-name <provider_hash> --provider-name <name>
 v2hub admin refresh-provider-token <provider_hash>
+
+# User <-> provider connections
+v2hub admin get-user-providers <user_id>
+v2hub admin get-user-provider <user_id> <provider_name>
+
+# Provider authorization workflow
+v2hub admin get-provider-authorization <provider_name> <user_id>
+v2hub admin process-provider-authorization <user_id> <provider_name> [--hmac <hmac>]
+v2hub admin approve-provider-authorization <user_id> <provider_name>
+v2hub admin reject-provider-authorization <user_id> <provider_name> [--force]
 
 # IP ban management
 v2hub admin ban-ip <ip_address> [--duration <seconds>]
@@ -269,6 +299,18 @@ Subscription listings are rendered as a Rich-formatted table; single-resource co
 | `v2hub remove-sources <token> -s <id>...`   | Remove sources                             |
 | `v2hub replace-sources <token> -s <uri>...` | Replace all sources                        |
 | `v2hub refresh <token>`                     | Refresh external URL sources               |
+| `v2hub me`                                  | Show your own account info                 |
+| `v2hub public <token>`                      | Fetch a subscription's public configs      |
+
+### Connection Commands
+
+| Command                                       | Description                              |
+| ---------------------------------------------- | ---------------------------------------- |
+| `v2hub connection list`                       | List your connections to providers       |
+| `v2hub connection get <provider_name>`        | Get your connection status for a provider|
+| `v2hub connection approve <provider_name>`    | Approve a pending connection request     |
+| `v2hub connection reject <provider_name>`     | Reject a pending connection request      |
+| `v2hub connection revoke <provider_name>`     | Revoke your authorization for a provider |
 
 ### Provider Commands
 
@@ -308,6 +350,14 @@ Subscription listings are rendered as a Rich-formatted table; single-resource co
 | `v2hub admin update-provider-url <provider_hash>`    | Update provider URL           |
 | `v2hub admin update-provider-name <provider_hash>`   | Update provider name          |
 | `v2hub admin refresh-provider-token <provider_hash>` | Refresh provider's API token  |
+| `v2hub admin get-provider-by-name <name>`            | Look up provider by name      |
+| `v2hub admin get-provider-by-owner-id <owner_id>`    | Look up provider by owner ID  |
+| `v2hub admin get-user-providers <user_id>`           | List a user's provider connections |
+| `v2hub admin get-user-provider <user_id> <name>`     | Get one user/provider connection |
+| `v2hub admin get-provider-authorization <name> <user_id>` | Get authorization state |
+| `v2hub admin process-provider-authorization <user_id> <name>` | Process a connection invite |
+| `v2hub admin approve-provider-authorization <user_id> <name>` | Approve a pending authorization |
+| `v2hub admin reject-provider-authorization <user_id> <name>`  | Reject/revoke an authorization |
 | `v2hub admin ban-ip <ip_address>`                    | Ban an IP address             |
 | `v2hub admin unban-ip <ip_address>`                  | Unban an IP address           |
 | `v2hub admin ban-status <ip_address>`                | Check an IP's ban status      |
@@ -349,8 +399,8 @@ If admin module is not installed, admin commands are automatically hidden and di
 
 ## Requirements
 
-- **v2hub** (required, installed automatically)
-- **v2hub-admin** >= 1.1.1, < 2.0.0 (optional, for admin commands)
+- **v2hub** (required, installed automatically) >= 1.1.2, < 2.0.0
+- **v2hub-admin** >= 1.1.4, < 2.0.0 (optional, for admin commands)
 - Python >= 3.10
 
 ## Graceful Admin Fallback
