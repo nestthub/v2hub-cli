@@ -183,14 +183,14 @@ class OutputFormatter:
             )
         )
 
-    def show_provider_connection(self, connection: Any, *, title: str = "🔗 Connection") -> None:
+    def show_provider_connection(
+        self,
+        connection: Any,
+        *,
+        title: str = "🔗 Connection",
+    ) -> None:
         """
-        Display a provider connection's status for a given user.
-
-        Args:
-            connection: A ProviderConnectionResponse-like object with
-                `user_id` and `status` attributes.
-            title: Panel title.
+        Display a provider connection's status and connection link.
         """
         status = getattr(connection, "status", None)
         status_str = getattr(status, "value", status)
@@ -200,10 +200,21 @@ class OutputFormatter:
             "revoked": "red",
         }.get(str(status_str), "yellow")
 
+        user_id = self._safe_str(getattr(connection, "user_id", None))
+
+        lines = [
+            f"User ID: [cyan]{user_id}[/cyan]",
+            f"Status: [{style}]{self._safe_str(status_str)}[/{style}]",
+        ]
+
+        connection_link = getattr(connection, "connection_link", None)
+
+        if connection_link:
+            lines.append(f"Connection link: [link={connection_link}]{connection_link}[/link]")
+
         self.console.print(
             Panel(
-                f"User ID: [cyan]{self._safe_str(getattr(connection, 'user_id', None))}[/cyan]\n"
-                f"Status: [{style}]{self._safe_str(status_str)}[/{style}]",
+                "\n".join(lines),
                 title=title,
                 border_style=style,
             )
